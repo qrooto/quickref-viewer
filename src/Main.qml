@@ -147,6 +147,19 @@ ApplicationWindow {
                         Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                         contentWidth: width; contentHeight: documentColumn.height+40
                         boundsBehavior: Flickable.StopAtBounds
+                        WheelHandler {
+                            target: null
+                            onWheel: function(event) {
+                                // Keep precise touchpad motion and give mouse wheels a useful step.
+                                const distance = event.pixelDelta.y !== 0
+                                    ? event.pixelDelta.y * 3
+                                    : event.angleDelta.y / 120 * 120
+                                reader.contentY = Math.max(0, Math.min(
+                                    Math.max(0, reader.contentHeight - reader.height),
+                                    reader.contentY - distance))
+                                event.accepted = true
+                            }
+                        }
                         ScrollBar.vertical: ScrollBar {}
                         onContentYChanged: if(!win.restoring)backend.rememberPosition(contentY)
                         Keys.onDownPressed: contentY=Math.min(Math.max(0,contentHeight-height),contentY+40)
