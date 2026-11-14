@@ -1,0 +1,23 @@
+{
+ "A second memory for your terminal": "Шпаргалки всегда под рукой",
+ "Notes folder": "Папка заметок",
+ "Search notes · Ctrl+K": "Поиск заметок · Ctrl+K",
+ "LIBRARY": "ЗАМЕТКИ",
+ "No matching notes": "Ничего не найдено",
+ "Add .md files to your notes folder": "Добавь .md файлы в папку заметок",
+ "Open in editor": "Открыть в редакторе",
+ "text": "текст",
+ "Copy": "Копировать",
+ "Copied": "Скопировано",
+ "Your answers, a keystroke away.\nChoose a note on the left.": "Ответы — в одном нажатии.\nВыбери заметку слева.",
+ "Ctrl+K  Search     Ctrl+Tab  Switch tab     Ctrl+W  Close tab     ?  Shortcuts": "Ctrl+K  Поиск     Ctrl+Tab  Сменить вкладку     Ctrl+W  Закрыть вкладку     ?  Подсказки",
+ "Keyboard shortcuts": "Горячие клавиши",
+ "Super+Ё — Show / hide Quickref\nCtrl+K — Search all notes\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+W — Close the current tab\nCtrl+E — Open note in editor\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help": "Super+Ё — Показать / скрыть Quickref\nCtrl+K — Поиск по всем заметкам\nEnter — Открыть первый результат\nCtrl+Tab / Ctrl+Shift+Tab — Смена вкладок\nCtrl+W — Закрыть текущую вкладку\nCtrl+E — Открыть заметку в редакторе\nCtrl+O — Открыть папку заметок\nПробел / PageDown — Прокрутить вниз\nF5 — Обновить заметки\nQ — Выйти\n? — Эта подсказка",
+ "Got it": "Понятно",
+ "Cannot create notes folder: %1": "Не удалось создать папку заметок: %1",
+ "Cannot read note: %1": "Не удалось прочитать заметку: %1",
+ "Note is missing or outside the notes folder: %1": "Заметка отсутствует или находится вне папки заметок: %1",
+ "Cannot save session": "Не удалось сохранить вкладки",
+ "Cannot open notes folder": "Не удалось открыть папку заметок",
+ "Cannot open editor": "Не удалось открыть редактор"
+}

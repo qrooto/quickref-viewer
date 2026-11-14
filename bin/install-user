@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+install -Dm755 "$ROOT/build/quickref" "$HOME/.local/bin/quickref"
+install -Dm644 "$ROOT/pkgbuild/quickref.svg" "$HOME/.local/share/icons/hicolor/scalable/apps/quickref.svg"
+mkdir -p "$HOME/.local/share/applications"
+sed "s|Exec=quickref open|Exec=$HOME/.local/bin/quickref open|" "$ROOT/pkgbuild/quickref.desktop" > "$HOME/.local/share/applications/quickref.desktop"
