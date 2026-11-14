@@ -6,7 +6,7 @@ A small Qt Quick Markdown reference for Omarchy. Press **Super + Ё / `** to dro
 
 Notes are ordinary `.md` files in `~/Notes/cheatsheets`. Subfolders are indexed recursively. The sidebar searches filenames, headings and full text; clicking a result opens a tab. Code blocks have syntax accents and a copy button. Open tabs and scroll positions survive hiding and restarting the app. Editing or adding files updates the library automatically.
 
-The app is a viewer. **Open in editor** uses your desktop's Markdown file association; **Notes folder** opens the file manager. Originals are never rewritten. Session state lives in `~/.local/share/quickref/session.json` and is saved atomically.
+**New note** (Ctrl+N) opens an internal Markdown form. Ctrl+S saves a new file atomically; existing files are never overwritten, and cancelling a draft asks before discarding it. **Open in editor** (Ctrl+W or Ctrl+E) uses your desktop's Markdown file association, hides Quickref and opens the editor in the underlying normal tiling workspace. **Notes folder** opens the file manager there too. Close a tab with its × button. Session state lives in `~/.local/share/quickref/session.json` and is saved atomically.
 
 ## Build and install
 
@@ -47,8 +47,10 @@ Create your notes folder and copy any examples you want from `examples/`. Existi
 | Enter in search | Open first result |
 | Down in search, then Enter | Select a result with keyboard |
 | Ctrl + Tab / Ctrl + Shift + Tab | Next / previous tab |
-| Ctrl + W | Close tab |
-| Ctrl + E | Open note in external editor |
+| Ctrl + W | Open note in external editor in normal tiling |
+| Ctrl + N | Create a new note |
+| Ctrl + S in new note | Save note |
+| Ctrl + E | Open note in external editor (alias of Ctrl+W) |
 | Ctrl + O | Open notes folder |
 | Space / PageDown / PageUp | Scroll when the reader has focus |
 | F5 | Reload notes |
@@ -59,6 +61,8 @@ Create your notes folder and copy any examples you want from `examples/`. Existi
 
 ```sh
 quickref open
+quickref create --name "Linux ports" --text "# Linux ports" --json
+quickref skill install --json
 quickref --notes /path/to/notes --state /path/to/session.json
 ```
 
@@ -69,6 +73,8 @@ QT_QPA_PLATFORMTHEME=basic QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
   build/quickref --notes examples --state /tmp/quickref-session.json \
   --screenshot /tmp/quickref.png
 ```
+
+`create` also accepts `--stdin` for Markdown content. It runs without a display, exits 0 on success or 1 on failure, and reports errors as JSON when `--json` is supplied. `skill install` installs the bundled agent instructions into `$CODEX_HOME/skills/quickref` (default `~/.codex/skills/quickref`).
 
 The interface follows the accent and rounding of Omarchy and watches its language setting live. English, Russian and Danish catalogs are bundled; Russian is the default if Omarchy has no language file. Missing translations fall back to English. Images and raw HTML in notes are not rendered; links open in the browser only when clicked. Syntax coloring is intentionally lightweight, not a full language parser. Very large libraries are indexed in memory.
 

@@ -1,4 +1,5 @@
 <RCC><qresource prefix="/">
+<file alias="agent-skill.md">agent-skill.md</file>
 <file alias="Main.qml">Main.qml</file>
 <file alias="i18n/ru.json">i18n/ru.json</file>
 <file alias="i18n/da.json">i18n/da.json</file>

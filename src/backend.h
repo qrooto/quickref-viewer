@@ -32,10 +32,13 @@ public:
  Q_INVOKABLE void copy(const QString &text);
  Q_INVOKABLE void openFolder();
  Q_INVOKABLE void edit();
+ Q_INVOKABLE bool createNote(const QString &name, const QString &text);
+ void launchError(const QString &message) { fail(message); }
  Q_INVOKABLE void rememberPosition(double position);
  Q_INVOKABLE double position() const { return m_positions.value(m_current,0); }
  static QVariantList parse(const QString &markdown);
 signals:
+ void externalRequested(const QString &path);
  void notesChanged();
  void tabsChanged();
  void documentChanged();

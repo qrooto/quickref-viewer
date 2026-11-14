@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QSaveFile>
+#include <QLockFile>
 #include <QTextDocument>
 #include <QFont>
 #include <QRegularExpression>
@@ -142,5 +143,24 @@ void Backend::save() {
  if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())fail(tr("Cannot save session"));
 }
 void Backend::copy(const QString &text) { QGuiApplication::clipboard()->setText(text); }
-void Backend::openFolder() { if(!QDesktopServices::openUrl(QUrl::fromLocalFile(m_folder)))fail(tr("Cannot open notes folder")); }
-void Backend::edit() { if(valid(m_current)&&!QDesktopServices::openUrl(QUrl::fromLocalFile(m_folder+"/"+m_current)))fail(tr("Cannot open editor")); }
+void Backend::openFolder() { emit externalRequested(m_folder); }
+void Backend::edit() {
+ if(!valid(m_current)) { fail(tr("Select a note first")); return; }
+ emit externalRequested(m_folder+"/"+m_current);
+}
+bool Backend::createNote(const QString &name, const QString &text) {
+ QString filename=name.trimmed();
+ if(filename.isEmpty() || filename=="." || filename==".." || filename.contains('/') || filename.contains('\\') || filename.contains(QRegularExpression("[\\x00-\\x1f]"))) {
+  fail(tr("Enter a filename without slashes")); return false;
+ }
+ if(!filename.endsWith(".md",Qt::CaseInsensitive))filename+=".md";
+ const QString path=m_folder+"/"+filename;
+ QLockFile lock(path+".lock");
+ if(!lock.tryLock(0)){fail(tr("This note is being created elsewhere"));return false;}
+ if(QFileInfo::exists(path)||QFileInfo(path).isSymLink()){fail(tr("A note with this name already exists"));return false;}
+ QSaveFile file(path);auto bytes=text.toUtf8();
+ if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit()) {
+  fail(tr("Cannot save note: %1").arg(file.errorString()));return false;
+ }
+ fail({});m_query.clear();refresh();open(filename);return true;
+}

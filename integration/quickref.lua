@@ -35,4 +35,16 @@ local function toggle()
   hl.dispatch(hl.dsp.workspace.toggle_special("quickref"))
 end
 o.rebind("SUPER + grave", "Quickref", toggle)
-return { toggle = toggle }
+local function open_external(path)
+  local mon = hl.get_active_monitor()
+  local regular = mon and mon.active_workspace
+  -- The monitor API reports the underlying regular workspace separately.
+  local workspace = regular and regular.name
+  if not workspace then error("Cannot determine the regular workspace") end
+  local panel = hl.get_workspace(SPACE)
+  if panel and panel.visible then
+    hl.dispatch(hl.dsp.workspace.toggle_special("quickref"))
+  end
+  hl.exec_cmd("gio open " .. o.shell_quote(path), { workspace = workspace })
+end
+return { toggle = toggle, open_external = open_external }

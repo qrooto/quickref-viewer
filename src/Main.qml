@@ -30,16 +30,16 @@ ApplicationWindow {
             win.restoring = false
         }
     }
-    Shortcut { sequence: "Ctrl+K"; context: Qt.ApplicationShortcut; onActivated: { search.forceActiveFocus(); search.selectAll() } }
-    Shortcut { sequence: "Ctrl+Tab"; context: Qt.ApplicationShortcut; onActivated: backend.cycle(1) }
-    Shortcut { sequence: "Ctrl+Shift+Tab"; context: Qt.ApplicationShortcut; onActivated: backend.cycle(-1) }
-    Shortcut { sequence: "Ctrl+W"; context: Qt.ApplicationShortcut; onActivated: backend.closeTab(backend.active) }
-    Shortcut { sequence: "Ctrl+E"; context: Qt.ApplicationShortcut; onActivated: backend.edit() }
-    Shortcut { sequence: "Ctrl+O"; context: Qt.ApplicationShortcut; onActivated: backend.openFolder() }
-    Shortcut { sequence: "F5"; context: Qt.ApplicationShortcut; onActivated: backend.refresh() }
-    Shortcut { sequence: "?"; enabled: !search.activeFocus; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
-    Shortcut { sequence: "Q"; enabled: !search.activeFocus; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
-    Shortcut { sequence: "Space"; enabled: !search.activeFocus; context: Qt.ApplicationShortcut; onActivated: reader.contentY = Math.min(Math.max(0,reader.contentHeight-reader.height),reader.contentY+reader.height*0.8) }
+    Shortcut { sequence: "Ctrl+K"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: { search.forceActiveFocus(); search.selectAll() } }
+    Shortcut { sequence: "Ctrl+Tab"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.cycle(1) }
+    Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.cycle(-1) }
+    Shortcut { sequence: "Ctrl+W"; context: Qt.ApplicationShortcut; enabled: !composer.visible; onActivated: backend.edit() }
+    Shortcut { sequence: "Ctrl+E"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.edit() }
+    Shortcut { sequence: "Ctrl+O"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.openFolder() }
+    Shortcut { sequence: "F5"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.refresh() }
+    Shortcut { sequence: "?"; enabled: !search.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
+    Shortcut { sequence: "Q"; enabled: !search.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
+    Shortcut { sequence: "Space"; enabled: !search.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: reader.contentY = Math.min(Math.max(0,reader.contentHeight-reader.height),reader.contentY+reader.height*0.8) }
     Connections { target: backend; function onTabsChanged() { win.restoring = true } function onDocumentChanged() { win.restorePosition() } }
     Component.onCompleted: restorePosition()
     Item {
@@ -61,6 +61,7 @@ ApplicationWindow {
                         Text { text: qsTr("A second memory for your terminal"); color: "#8a98ad"; font.pixelSize: 11 }
                     }
                     Item { Layout.fillWidth: true }
+                    Button { text: qsTr("New note"); highlighted: true; onClicked: composer.open() }
                     Button { text: qsTr("Notes folder"); flat: true; onClicked: backend.openFolder() }
                     Button { text: "?"; flat: true; onClicked: win.helpVisible = true }
                 }
@@ -219,7 +220,7 @@ ApplicationWindow {
                     }
                     Rectangle {
                         Layout.fillWidth: true; Layout.preferredHeight: 28; color: "#141b25"
-                        Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: qsTr("Ctrl+K  Search     Ctrl+Tab  Switch tab     Ctrl+W  Close tab     ?  Shortcuts"); color: "#7e90a7"; font.pixelSize: 10 }
+                        Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: qsTr("Ctrl+N  New note     Ctrl+K  Search     Ctrl+W  Open in editor     ?  Shortcuts"); color: "#7e90a7"; font.pixelSize: 10 }
                     }
                 }
             }
@@ -233,8 +234,84 @@ ApplicationWindow {
         contentItem: Column {
             spacing: 18
             Label { text: qsTr("Keyboard shortcuts"); font.pixelSize: 22; font.bold: true }
-            Label { width: parent.width; text: qsTr("Super+Ё — Show / hide Quickref\nCtrl+K — Search all notes\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+W — Close the current tab\nCtrl+E — Open note in editor\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
+            Label { width: parent.width; text: qsTr("Super+Ё — Show / hide Quickref\nCtrl+K — Search all notes\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
             Button { text: qsTr("Got it"); onClicked: win.helpVisible=false }
         }
     }
+    function saveNote() {
+        if (backend.createNote(noteName.text, noteBody.text)) {
+            search.text = ""
+            composer.close()
+            noteName.text = ""; noteBody.text = ""
+            reader.forceActiveFocus()
+        }
+    }
+    function cancelNote() {
+        if (noteName.text.length || noteBody.text.length) discardDialog.open()
+        else composer.close()
+    }
+    property bool quitAfterDiscard: false
+    onClosing: function(close) {
+        if(composer.visible && (noteName.text.length || noteBody.text.length)) {
+            close.accepted = false
+            quitAfterDiscard = true
+            discardDialog.open()
+        }
+    }
+    Shortcut { sequence: "Ctrl+N"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: composer.open() }
+    Shortcut { sequence: "Ctrl+S"; enabled: composer.visible && !discardDialog.visible; context: Qt.ApplicationShortcut; onActivated: win.saveNote() }
+    Shortcut { sequence: "Escape"; enabled: composer.visible && !discardDialog.visible; context: Qt.ApplicationShortcut; onActivated: win.cancelNote() }
+    Dialog {
+        id: composer; objectName: "composer"
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(win.width-40,900); height: Math.min(win.height-24,690)
+        modal: true; closePolicy: Popup.NoAutoClose
+        title: qsTr("Create a note")
+        onOpened: noteName.forceActiveFocus()
+        contentItem: ColumnLayout {
+            spacing: 12
+            TextField {
+                id: noteName; objectName: "noteName"; Layout.fillWidth: true
+                placeholderText: qsTr("Filename, for example Docker commands")
+                selectByMouse: true
+                Keys.onReturnPressed: noteBody.forceActiveFocus()
+            }
+            Label { text: qsTr("Markdown content"); color: "#96a6bb" }
+            ScrollView {
+                Layout.fillWidth: true; Layout.fillHeight: true
+                TextArea {
+                    id: noteBody; objectName: "noteBody"
+                    placeholderText: qsTr("# Topic\n\nYour explanation and commands…")
+                    font.family: "monospace"; font.pixelSize: 14
+                    textFormat: TextEdit.PlainText; wrapMode: TextEdit.Wrap
+                    selectByMouse: true
+                }
+            }
+            Label { Layout.fillWidth: true; visible: backend.error!==""; text: backend.error; color: "#ffadad"; wrapMode: Text.WordWrap }
+            RowLayout {
+                Label { Layout.fillWidth: true; text: qsTr("Saved as .md in your notes folder"); color: "#8698ae"; font.pixelSize: 11 }
+                Button { text: qsTr("Cancel"); onClicked: win.cancelNote() }
+                Button { text: qsTr("Save note · Ctrl+S"); enabled: noteName.text.trim().length>0; highlighted: true; onClicked: win.saveNote() }
+            }
+        }
+    }
+    Dialog {
+        id: discardDialog; objectName: "discardDialog"
+        width: Math.min(win.width-40,500)
+        anchors.centerIn: Overlay.overlay; modal: true
+        title: qsTr("Discard this draft?")
+        onAccepted: {
+            noteName.text=""; noteBody.text=""; composer.close()
+            if(win.quitAfterDiscard)Qt.quit()
+        }
+        onRejected: win.quitAfterDiscard=false
+        contentItem: ColumnLayout {
+            Label { text: qsTr("The note has not been saved."); padding: 12 }
+            RowLayout {
+                Button { text: qsTr("Keep editing"); onClicked: discardDialog.reject() }
+                Button { text: qsTr("Discard"); onClicked: discardDialog.accept() }
+            }
+        }
+    }
+
 }

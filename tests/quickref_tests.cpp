@@ -39,6 +39,16 @@ private slots:
   auto unsafe=Backend::parse("<img src='https://example.com/private'>");QVERIFY(!unsafe[0].toMap()["html"].toString().contains("<img"));
   QTemporaryDir dir;Backend b(dir.path(),dir.path()+"/session");b.copy("docker ps\n");QCOMPARE(QGuiApplication::clipboard()->text(),QString("docker ps\n"));
  }
+ void createWithoutOverwrite(){
+  QTemporaryDir dir;auto folder=dir.path()+"/notes";Backend b(folder,dir.path()+"/session");
+  QVERIFY(b.createNote(QString::fromUtf8("Команды"),QString::fromUtf8("# Подсказка\n\n```bash\nip a\n```")));
+  QCOMPARE(b.current(),QString::fromUtf8("Команды.md"));QCOMPARE(b.notes().size(),1);
+  QFile original(folder+"/"+b.current());QVERIFY(original.open(QIODevice::ReadOnly));auto bytes=original.readAll();original.close();
+  QVERIFY(!b.createNote(QString::fromUtf8("Команды.md"),"overwrite"));QVERIFY(original.open(QIODevice::ReadOnly));QCOMPARE(original.readAll(),bytes);
+  QVERIFY(!b.createNote("../escape","no"));QVERIFY(!QFileInfo::exists(dir.path()+"/escape.md"));
+  QVERIFY(!b.createNote("/absolute","no"));QVERIFY(!b.createNote(" ","no"));
+  write(dir.path()+"/outside.md","outside");QFile::link(dir.path()+"/outside.md",folder+"/linked.md");QVERIFY(!b.createNote("linked.md","no"));
+ }
  void languageAndTheme(){
   QTemporaryDir dir;auto lang=dir.path()+"/language";write(lang,"ru\n");
   Translator translator(lang);QCOMPARE(translator.translate("Main","Notes folder"),QString::fromUtf8("Папка заметок"));
@@ -62,7 +72,22 @@ private slots:
   reader->setProperty("contentY",350.0);QTest::qWait(80);QCOMPARE(b.position(),350.0);
   QTest::keyClick(window,Qt::Key_Tab,Qt::ControlModifier);QCOMPARE(b.current(),QString("b.md"));QTest::qWait(80);
   QTest::keyClick(window,Qt::Key_Tab,Qt::ControlModifier);QTest::qWait(80);QCOMPARE(reader->property("contentY").toDouble(),350.0);
-  QTest::keyClick(window,Qt::Key_W,Qt::ControlModifier);QCOMPARE(b.tabs().size(),1);
+  QSignalSpy external(&b,&Backend::externalRequested);
+  QTest::keyClick(window,Qt::Key_W,Qt::ControlModifier);QCOMPARE(b.tabs().size(),2);QCOMPARE(external.size(),1);QCOMPARE(external[0][0].toString(),notes+"/a.md");
+  QTest::keyClick(window,Qt::Key_N,Qt::ControlModifier);
+  auto composer=window->findChild<QObject*>("composer");auto noteName=window->findChild<QObject*>("noteName");auto noteBody=window->findChild<QObject*>("noteBody");
+  QVERIFY(composer);QVERIFY(noteName);QVERIFY(noteBody);QTRY_VERIFY(composer->property("visible").toBool());
+  noteName->setProperty("text",QString("Created"));noteBody->setProperty("text",QString("# New note\n\n```bash\ndocker ps\n```"));
+  QTest::keyClick(window,Qt::Key_W,Qt::ControlModifier);QCOMPARE(external.size(),1);QVERIFY(composer->property("visible").toBool());
+  QTest::keyClick(window,Qt::Key_S,Qt::ControlModifier);QTRY_VERIFY(!composer->property("visible").toBool());QCOMPARE(b.current(),QString("Created.md"));QVERIFY(QFileInfo::exists(notes+"/Created.md"));
+  QTest::keyClick(window,Qt::Key_N,Qt::ControlModifier);QTRY_VERIFY(composer->property("visible").toBool());
+  noteName->setProperty("text",QString("Created"));noteBody->setProperty("text",QString("Do not lose my draft"));
+  QTest::keyClick(window,Qt::Key_S,Qt::ControlModifier);QVERIFY(composer->property("visible").toBool());QCOMPARE(noteBody->property("text").toString(),QString("Do not lose my draft"));
+  auto discard=window->findChild<QObject*>("discardDialog");QVERIFY(discard);
+  QTest::keyClick(window,Qt::Key_Escape);QTRY_VERIFY(discard->property("visible").toBool());QVERIFY(composer->property("visible").toBool());
+  QMetaObject::invokeMethod(discard,"reject");QTRY_VERIFY(!discard->property("visible").toBool());
+  window->close();QTRY_VERIFY(discard->property("visible").toBool());QVERIFY(window->isVisible());QCOMPARE(noteBody->property("text").toString(),QString("Do not lose my draft"));
+  QMetaObject::invokeMethod(discard,"reject");noteName->setProperty("text",QString());noteBody->setProperty("text",QString());QMetaObject::invokeMethod(composer,"close");
   QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));
  }
 };
