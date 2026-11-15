@@ -74,7 +74,7 @@ void Backend::search(const QString &query) {
   QString title=QFileInfo(it.key()).completeBaseName();
   auto heading=QRegularExpression("^#\\s+(.+)$",QRegularExpression::MultilineOption).match(it.value());
   if(heading.hasMatch())title=heading.captured(1).trimmed();
-  bool matches=true;for(auto &word:words)if(!(it.key()+" "+title+" "+it.value()).contains(word,Qt::CaseInsensitive))matches=false;
+  bool matches=true;for(auto &word:words)if(!(QFileInfo(it.key()).completeBaseName()+" "+title).contains(word,Qt::CaseInsensitive))matches=false;
   if(matches)m_notes<<QVariantMap{{"path",it.key()},{"title",title}};
  }
  emit notesChanged();

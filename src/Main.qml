@@ -16,6 +16,67 @@ ApplicationWindow {
     property bool restoring: false
     property bool helpVisible: false
     property real pendingPosition: 0
+    property bool findVisible: false
+    property var matches: []
+    property int matchIndex: -1
+    function openFind() {
+        findVisible = true
+        noteFind.forceActiveFocus()
+        noteFind.selectAll()
+    }
+    function clearMatch() {
+        for (let i = 0; i < blocksRepeater.count; ++i) {
+            const section = blocksRepeater.itemAt(i)
+            if (section) section.searchEditor.deselect()
+        }
+    }
+    function findMatches() {
+        clearMatch()
+        const found = []
+        const query = noteFind.text.toLowerCase()
+        if (findVisible && query.length) {
+            for (let i = 0; i < blocksRepeater.count; ++i) {
+                const section = blocksRepeater.itemAt(i)
+                if (!section) continue
+                const editor = section.searchEditor
+                const plain = editor.getText(0, editor.length).toLowerCase()
+                let offset = 0
+                while ((offset = plain.indexOf(query, offset)) !== -1) {
+                    found.push({editor: editor, start: offset, end: offset + query.length})
+                    offset += query.length
+                }
+            }
+        }
+        matches = found
+        matchIndex = found.length ? 0 : -1
+        showMatch()
+    }
+    function showMatch() {
+        clearMatch()
+        if (matchIndex < 0 || matchIndex >= matches.length) return
+        const match = matches[matchIndex]
+        match.editor.select(match.start, match.end)
+        const rect = match.editor.positionToRectangle(match.start)
+        const point = match.editor.mapToItem(reader.contentItem, rect.x, rect.y)
+        reader.contentY = Math.max(0, Math.min(reader.contentHeight - reader.height,
+                                             point.y - reader.height / 3))
+    }
+    function nextMatch(direction) {
+        if (!matches.length) return
+        matchIndex = (matchIndex + direction + matches.length) % matches.length
+        showMatch()
+    }
+    function closeFind() {
+        findVisible = false
+        clearMatch()
+        matches = []
+        matchIndex = -1
+        reader.forceActiveFocus()
+    }
+    Shortcut { sequence: "Ctrl+F"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.openFind() }
+    Shortcut { sequence: "F3"; enabled: win.findVisible && !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.nextMatch(1) }
+    Shortcut { sequence: "Shift+F3"; enabled: win.findVisible && !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.nextMatch(-1) }
+    Shortcut { sequence: "Escape"; enabled: win.findVisible && !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.closeFind() }
     function restorePosition() {
         restoring = true
         pendingPosition = backend.position()
@@ -28,6 +89,7 @@ ApplicationWindow {
             documentColumn.forceLayout()
             reader.contentY = Math.min(win.pendingPosition, Math.max(0, reader.contentHeight-reader.height))
             win.restoring = false
+            if (win.findVisible) win.findMatches()
         }
     }
     Shortcut { sequence: "Ctrl+K"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: { search.forceActiveFocus(); search.selectAll() } }
@@ -37,9 +99,9 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+E"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.edit() }
     Shortcut { sequence: "Ctrl+O"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.openFolder() }
     Shortcut { sequence: "F5"; enabled: !composer.visible; context: Qt.ApplicationShortcut; onActivated: backend.refresh() }
-    Shortcut { sequence: "?"; enabled: !search.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
-    Shortcut { sequence: "Q"; enabled: !search.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
-    Shortcut { sequence: "Space"; enabled: !search.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: reader.contentY = Math.min(Math.max(0,reader.contentHeight-reader.height),reader.contentY+reader.height*0.8) }
+    Shortcut { sequence: "?"; enabled: !search.activeFocus && !noteFind.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
+    Shortcut { sequence: "Q"; enabled: !search.activeFocus && !noteFind.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
+    Shortcut { sequence: "Space"; enabled: !search.activeFocus && !noteFind.activeFocus && !composer.visible; context: Qt.ApplicationShortcut; onActivated: reader.contentY = Math.min(Math.max(0,reader.contentHeight-reader.height),reader.contentY+reader.height*0.8) }
     Connections { target: backend; function onTabsChanged() { win.restoring = true } function onDocumentChanged() { win.restorePosition() } }
     Component.onCompleted: restorePosition()
     Item {
@@ -75,7 +137,7 @@ ApplicationWindow {
                         anchors.fill: parent; anchors.margins: 14; spacing: 12
                         TextField {
                             id: search; objectName: "search"
-                            Layout.fillWidth: true; placeholderText: qsTr("Search notes · Ctrl+K")
+                            Layout.fillWidth: true; placeholderText: qsTr("Search note titles · Ctrl+K")
                             font.pixelSize: 13; selectByMouse: true
                             onTextChanged: backend.search(text)
                             Keys.onDownPressed: { notesList.forceActiveFocus(); notesList.currentIndex = 0 }
@@ -139,22 +201,44 @@ ApplicationWindow {
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#263141" }
                     RowLayout {
+                        objectName: "noteToolbar"
+                        Layout.minimumHeight: implicitHeight
                         Layout.fillWidth: true; Layout.leftMargin: 24; Layout.rightMargin: 16; spacing: 8
                         Label { Layout.fillWidth: true; text: backend.current; elide: Text.ElideMiddle; color: "#8191a7"; font.pixelSize: 11 }
+                        Button { text: qsTr("Find in note · Ctrl+F"); flat: true; enabled: backend.active>=0; onClicked: win.openFind() }
                         Button { text: qsTr("Open in editor"); flat: true; enabled: backend.active>=0; onClicked: backend.edit() }
+                    }
+                    RowLayout {
+                        objectName: "noteFindBar"
+                        visible: win.findVisible
+                        Layout.minimumHeight: implicitHeight
+                        Layout.fillWidth: true; Layout.leftMargin: 24; Layout.rightMargin: 16
+                        TextField {
+                            id: noteFind; objectName: "noteFind"
+                            Layout.fillWidth: true
+                            placeholderText: qsTr("Find in note · Ctrl+F")
+                            selectByMouse: true
+                            onTextChanged: win.findMatches()
+                            Keys.onReturnPressed: function(event) { win.nextMatch(event.modifiers & Qt.ShiftModifier ? -1 : 1) }
+                        }
+                        Label { objectName: "matchCount"; text: noteFind.text.length ? (win.matches.length ? (win.matchIndex + 1) + " / " + win.matches.length : qsTr("No matches")) : ""; color: "#90a9c6" }
+                        ToolButton { text: "↑"; enabled: win.matches.length > 0; onClicked: win.nextMatch(-1); ToolTip.text: qsTr("Previous match · Shift+Enter"); ToolTip.visible: hovered }
+                        ToolButton { text: "↓"; enabled: win.matches.length > 0; onClicked: win.nextMatch(1); ToolTip.text: qsTr("Next match · Enter"); ToolTip.visible: hovered }
+                        ToolButton { text: "×"; onClicked: win.closeFind() }
                     }
                     Flickable {
                         id: reader; objectName: "reader"
                         Layout.fillWidth: true; Layout.fillHeight: true; clip: true
-                        contentWidth: width; contentHeight: documentColumn.height+40
+                        Layout.minimumHeight: 0
+                        contentWidth: width; contentHeight: documentColumn.y+documentColumn.height+40
                         boundsBehavior: Flickable.StopAtBounds
                         WheelHandler {
                             target: null
                             onWheel: function(event) {
                                 // Keep precise touchpad motion and give mouse wheels a useful step.
                                 const distance = event.pixelDelta.y !== 0
-                                    ? event.pixelDelta.y * 3
-                                    : event.angleDelta.y / 120 * 120
+                                    ? event.pixelDelta.y * 6
+                                    : event.angleDelta.y / 120 * 240
                                 reader.contentY = Math.max(0, Math.min(
                                     Math.max(0, reader.contentHeight - reader.height),
                                     reader.contentY - distance))
@@ -171,18 +255,24 @@ ApplicationWindow {
                         }
                         Column {
                             id: documentColumn
+                            objectName: "documentColumn"
+                            y: 16
                             x: 28; width: Math.max(100,reader.width-56); spacing: 16
                             Repeater {
+                                id: blocksRepeater
                                 model: backend.blocks
                                 delegate: Rectangle {
                                     id: section
                                     required property var modelData
+                                    property var searchEditor: modelData.code ? codeText : prose
                                     width: documentColumn.width
                                     height: modelData.code ? codeColumn.height+24 : prose.height
                                     radius: theme.radius
                                     color: modelData.code ? "#192330" : "transparent"
                                     border.width: modelData.code ? 1 : 0; border.color: "#2b3b50"
                                     TextArea {
+                                        persistentSelection: true
+                                        selectionColor: theme.accent; selectedTextColor: theme.accentForeground
                                         id: prose; visible: !section.modelData.code
                                         width: parent.width; padding: 0
                                         text: section.modelData.html; textFormat: TextEdit.RichText
@@ -206,6 +296,9 @@ ApplicationWindow {
                                             }
                                         }
                                         TextArea {
+                                            id: codeText
+                                            persistentSelection: true
+                                            selectionColor: theme.accent; selectedTextColor: theme.accentForeground
                                             width: parent.width; padding: 0
                                             text: section.modelData.html; textFormat: TextEdit.RichText
                                             color: "#b7d4ef"; font.family: "monospace"; font.pixelSize: 13
@@ -220,7 +313,7 @@ ApplicationWindow {
                     }
                     Rectangle {
                         Layout.fillWidth: true; Layout.preferredHeight: 28; color: "#141b25"
-                        Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: qsTr("Ctrl+N  New note     Ctrl+K  Search     Ctrl+W  Open in editor     ?  Shortcuts"); color: "#7e90a7"; font.pixelSize: 10 }
+                        Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: qsTr("Ctrl+N  New note     Ctrl+K  Search     Ctrl+F  Find in note     Ctrl+W  Open in editor     ?  Shortcuts"); color: "#7e90a7"; font.pixelSize: 10 }
                     }
                 }
             }
@@ -234,7 +327,7 @@ ApplicationWindow {
         contentItem: Column {
             spacing: 18
             Label { text: qsTr("Keyboard shortcuts"); font.pixelSize: 22; font.bold: true }
-            Label { width: parent.width; text: qsTr("Super+Ё — Show / hide Quickref\nCtrl+K — Search all notes\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
+            Label { width: parent.width; text: qsTr("Super+Ё — Show / hide Quickref\nCtrl+K — Search note titles\nCtrl+F — Find in current note\nEnter / Shift+Enter — Next / previous match\nEscape — Close find\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
             Button { text: qsTr("Got it"); onClicked: win.helpVisible=false }
         }
     }
