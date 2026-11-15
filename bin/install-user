@@ -1,4 +1,0 @@
-#!/bin/sh
-set -eu
-echo "Quickref Viewer runs in place. See README.md for setup."
-exit 1
