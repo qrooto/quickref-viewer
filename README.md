@@ -1,10 +1,12 @@
 # Quickref
 
-A drop-down Markdown reference for Linux and DevOps notes, built with C++17 and Qt Quick for Omarchy.
+**English** | [Русский](README.ru.md)
+
+Your Markdown notes, one shortcut away. Quickref is a lightweight drop-down reader for keeping useful information close at hand: personal notes, study materials, recipes, checklists, command references, and more. Built with C++17 and Qt Quick for Omarchy.
 
 ![Quickref screenshot](preview.png)
 
-Press **Super + Ё / `** to drop it down over your work, then press the same keys to hide it.
+Press **Super + ~** to drop it down over your work, then press the same keys to hide it.
 
 Notes are ordinary `.md` files in `~/Notes/cheatsheets`. Subfolders are indexed recursively. The sidebar searches note titles and filenames; clicking a result opens a tab. Code blocks have syntax accents and a copy button. Open tabs and scroll positions survive hiding and restarting the app. Editing or adding files updates the library automatically.
 
@@ -53,7 +55,7 @@ The integration launches `~/.local/bin/quickref`; for a package-only install, ch
 
 Then run `hyprctl reload` and `hyprctl configerrors`.
 
-This replaces the original **Super + grave** binding (the Ё key on a Russian keyboard). It uses its own `special:quickref` workspace and Omarchy's existing slide animation. The original `qconsole` and its agent are preserved; agents in normal tiling remain available on Super+Ctrl+Shift+A. Remove the `require` line and reload to restore the original hotkey. Back up config files before changing them.
+The shortcut is shown here as **Super + ~**: press Super and the key marked with a tilde, without Shift. The integration uses the `grave` key binding and replaces Omarchy’s original shortcut on that key. It uses its own `special:quickref` workspace and Omarchy's existing slide animation. The original `qconsole` and its agent are preserved; agents in normal tiling remain available on Super+Ctrl+Shift+A. Remove the `require` line and reload to restore the original hotkey. Back up config files before changing them.
 
 The panel covers 65% of the usable screen height and 86% of its width. It follows the monitor used to open it. Change the proportions in `quickref.lua` if needed.
 
@@ -68,7 +70,7 @@ cp -n examples/*.md ~/Notes/cheatsheets/
 
 | Shortcut | Action |
 | --- | --- |
-| Super + Ё / grave | Show / hide (Omarchy integration) |
+| Super + ~ | Show / hide (Omarchy integration) |
 | Ctrl + K | Search note titles and filenames |
 | Ctrl + F | Find in current note, with selection and match count |
 | Enter / Shift + Enter, F3 / Shift + F3 | Next / previous match (wraps around) |
@@ -90,7 +92,7 @@ cp -n examples/*.md ~/Notes/cheatsheets/
 
 ```sh
 quickref open
-quickref create --name "Linux ports" --text "# Linux ports" --json
+quickref create --name "Reading list" --text "# Reading list" --json
 quickref skill install --json
 quickref --notes /path/to/notes --state /path/to/session.json
 ```
