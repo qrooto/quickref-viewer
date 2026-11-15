@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.qrooto.quickref-viewer",
+  "name": "Quickref Viewer",
+  "version": "0.1.0",
+  "author": "qrooto",
+  "description": "Your Markdown notes, a shortcut away.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "QuickrefWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Quickref Viewer",
+    "description": "Open your Markdown reference library",
+    "category": "Productivity",
+    "allowMultiple": false
+  }
+}

@@ -8,7 +8,7 @@ ApplicationWindow {
     width: 1100; height: 650
     minimumWidth: 680; minimumHeight: 340
     visible: true
-    title: "Quickref"
+    title: "Quickref Viewer"
     color: "#10151d"
     Material.theme: Material.Dark
     Material.accent: theme.accent
@@ -119,8 +119,8 @@ ApplicationWindow {
                         Text { anchors.centerIn: parent; text: ">_"; color: theme.accentForeground; font.bold: true; font.pixelSize: 16 }
                     }
                     Column {
-                        Text { text: "Quickref"; color: "#f2f5fa"; font.pixelSize: 19; font.bold: true }
-                        Text { text: qsTr("A second memory for your terminal"); color: "#8a98ad"; font.pixelSize: 11 }
+                        Text { text: "Quickref Viewer"; color: "#f2f5fa"; font.pixelSize: 19; font.bold: true }
+                        Text { text: qsTr("Your Markdown notes, a shortcut away"); color: "#8a98ad"; font.pixelSize: 11 }
                     }
                     Item { Layout.fillWidth: true }
                     Button { text: qsTr("New note"); highlighted: true; onClicked: composer.open() }
@@ -327,7 +327,7 @@ ApplicationWindow {
         contentItem: Column {
             spacing: 18
             Label { text: qsTr("Keyboard shortcuts"); font.pixelSize: 22; font.bold: true }
-            Label { width: parent.width; text: qsTr("Super+Ё — Show / hide Quickref\nCtrl+K — Search note titles\nCtrl+F — Find in current note\nEnter / Shift+Enter — Next / previous match\nEscape — Close find\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
+            Label { width: parent.width; text: qsTr("Super+Alt+grave — Show / hide Quickref\nCtrl+K — Search note titles\nCtrl+F — Find in current note\nEnter / Shift+Enter — Next / previous match\nEscape — Close find\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
             Button { text: qsTr("Got it"); onClicked: win.helpVisible=false }
         }
     }

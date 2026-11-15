@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+if output=$(hyprctl eval 'require("hypr.quickref_viewer").toggle()' 2>&1); then
+  case "$output" in
+    *error:*|*Error:*|*"stack traceback"*) ;;
+    *) exit 0 ;;
+  esac
+fi
+notify-send 'Quickref Viewer' 'Complete the drop-down setup and native build in README.md, then reload Hyprland.'
+exit 1

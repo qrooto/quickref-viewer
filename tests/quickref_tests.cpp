@@ -51,8 +51,18 @@ private slots:
   QVERIFY(!b.createNote("/absolute","no"));QVERIFY(!b.createNote(" ","no"));
   write(dir.path()+"/outside.md","outside");QFile::link(dir.path()+"/outside.md",folder+"/linked.md");QVERIFY(!b.createNote("linked.md","no"));
  }
+ void englishFallback(){
+  QTemporaryDir dir;
+  qunsetenv("QUICKREF_LANGUAGE");
+  auto russian=dir.path()+"/russian"; write(russian,"ru\n");
+  Translator english(russian); QCOMPARE(english.language(), QString("en"));
+  QCOMPARE(Translator::readLanguage(dir.path()+"/missing"), QString("en"));
+  auto path=dir.path()+"/language"; write(path,"invalid locale\n");
+  QCOMPARE(Translator::readLanguage(path), QString("en"));
+ }
  void languageAndTheme(){
   QTemporaryDir dir;auto lang=dir.path()+"/language";write(lang,"ru\n");
+  qputenv("QUICKREF_LANGUAGE", "system");
   Translator translator(lang);QCOMPARE(translator.translate("Main","Notes folder"),QString::fromUtf8("Папка заметок"));
   write(lang,"da\n");QTRY_COMPARE(translator.language(),QString("da"));QCOMPARE(translator.translate("Main","Notes folder"),QString("Notemappe"));
   QDir(dir.path()).mkdir("theme");write(dir.path()+"/theme/colors.toml","accent = \"#112233\"\n");
@@ -60,6 +70,7 @@ private slots:
   write(dir.path()+"/theme/colors.toml","accent = \"#aabbcc\"\n");QTRY_COMPARE(theme.accent(),QString("#aabbcc"));
  }
  void qmlKeyboardAndScroll(){
+  qunsetenv("QUICKREF_LANGUAGE");
   QTemporaryDir dir;auto notes=dir.path()+"/notes";QDir().mkpath(notes);
   write(notes+"/a.md","# Alpha\n"+QByteArray("long content\n\n").repeated(100));write(notes+"/b.md","# Bravo\nUnique query\n");
   Backend b(notes,dir.path()+"/session");Theme theme(dir.path());Translator translator(dir.path()+"/language");

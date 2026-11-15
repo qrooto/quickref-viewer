@@ -1,125 +1,101 @@
-# Quickref
+# Quickref Viewer
 
-**English** | [Русский](README.ru.md)
+Your Markdown notes, a shortcut away. Press **Super+Alt+grave** to slide Quickref Viewer down from the top of the screen. Find what you need, then press the same shortcut to hide it and return to work.
 
-Your Markdown notes, one shortcut away. Quickref is a lightweight drop-down reader for keeping useful information close at hand: personal notes, study materials, recipes, checklists, command references, and more. Built with C++17 and Qt Quick for Omarchy.
+![Quickref Viewer with English example notes](preview.png)
 
-![Quickref screenshot](preview.png)
+Quickref Viewer is a native C++17 / Qt Quick application with an Omarchy Quattro bar plugin and a dedicated Hyprland special workspace. It remembers open tabs and reading positions. Notes are ordinary Markdown files; existing files are never overwritten when creating a note.
 
-Press **Super + ~** to drop it down over your work, then press the same keys to hide it.
+## Requirements
 
-Notes are ordinary `.md` files in `~/Notes/cheatsheets`. Subfolders are indexed recursively. The sidebar searches note titles and filenames; clicking a result opens a tab. Code blocks have syntax accents and a copy button. Open tabs and scroll positions survive hiding and restarting the app. Editing or adding files updates the library automatically.
+- Omarchy Quattro with Lua-based Hyprland configuration and the `hl` / `o` helpers. Older `hyprland.conf` installations are unsupported.
+- Runtime: `qt6-base`, `qt6-declarative`, `qt6-wayland`, `glib2` (external editor/file manager), `libnotify` (setup errors).
+- Build: `base-devel`, including a C++17 compiler and make, plus `qmake6` from Qt.
 
-**New note** (Ctrl+N) opens an internal Markdown form. Ctrl+S saves a new file atomically; existing files are never overwritten, and cancelling a draft asks before discarding it. **Open in editor** (Ctrl+W or Ctrl+E) uses your desktop's Markdown file association, hides Quickref and opens the editor in the underlying normal tiling workspace. **Notes folder** opens the file manager there too. Close a tab with its × button. Session state lives in `~/.local/share/quickref/session.json` and is saved atomically.
+## Manual installation
 
-## Build and install
+This plugin requires a native build and explicit hotkey setup. Installing the repository alone is insufficient. Marketplace maintainers should mark this listing **manual-setup**.
 
-Requires Qt 6 base and declarative, qmake6, make and a C++17 compiler. The Arch package also depends on Qt Wayland, `xdg-utils` and `glib2` for desktop integration.
+1. Place this repository at `~/.config/omarchy/plugins/io.github.qrooto.quickref-viewer`.
+2. Build and test it from that directory:
 
-On Arch Linux / Omarchy:
+   ```sh
+   ./bin/build
+   ./bin/test
+   ```
 
-```sh
-sudo pacman -S --needed base-devel qt6-base qt6-declarative qt6-wayland xdg-utils glib2
-git clone https://github.com/qrooto/quickref.git
-cd quickref
-./bin/build
-./bin/test
-```
+3. Back up your Hyprland configuration. Copy `integration/quickref_viewer.lua` to `~/.config/hypr/quickref_viewer.lua`. Add this after the default modules in `~/.config/hypr/hyprland.lua`:
 
-Install for the current user:
+   ```lua
+   require("hypr.quickref_viewer")
+   ```
 
-```sh
-./bin/install-user
-~/.local/bin/quickref open
-```
+4. Check that **Super+Alt+grave** is available before enabling the module. The module registers that shortcut; edit its binding if you prefer another. `grave` is the physical backtick/tilde key, without Shift.
+5. Run `hyprctl reload`, then `hyprctl configerrors`. Resolve any errors before using the shortcut.
+6. Optionally enable the plugin in Omarchy and add **Quickref Viewer** to the bar through the bar editor. Clicking it performs the same drop-down toggle.
 
-This installs the built binary, icon and application launcher under `~/.local` without root. Alternatively, `./bin/install` builds and installs an Arch package with `makepkg -fsi`. To build the package without installing, run `makepkg -f` in `pkgbuild/`.
+The panel uses `special:quickref-viewer`, 65% of usable screen height and 86% of width (minimum width 900, capped to the monitor). It uses Omarchy's existing special-workspace slide animation. Hiding preserves the process and reading position. Opening a note in an external editor hides the panel and opens the editor in the underlying regular workspace.
 
-For a first run with the bundled notes, without changing your library:
+No installer edits your Hyprland configuration, bar layout, or keybindings automatically. The module is loaded only after you explicitly add the `require` line. No root access is required for the build or plugin setup.
 
-```sh
-./build/quickref --notes "$PWD/examples" --state /tmp/quickref-example-session.json
-```
+## Notes and language
 
-## Omarchy integration
+Quickref Viewer uses `~/Notes/quickref-viewer` and `~/.local/share/quickref-viewer/session.json`. These are separate from the original Quickref Viewer application's notes and session. Add Markdown files manually, use **Ctrl+N**, or copy the English examples with `cp -n examples/*.md ~/Notes/quickref-viewer/` after creating the directory.
 
-The drop-down integration requires Omarchy’s Lua-based Hyprland configuration and its `hl` / `o` helpers. It is not a configuration snippet for older `hyprland.conf` setups. Quickref can also run as a regular window without this integration.
-
-Copy `integration/quickref.lua` to `~/.config/hypr/quickref.lua` and add this after the default modules in `~/.config/hypr/hyprland.lua`:
-
-```lua
-require("hypr.quickref")
-```
-
-The integration launches `~/.local/bin/quickref`; for a package-only install, change that command to `quickref open`.
-
-Then run `hyprctl reload` and `hyprctl configerrors`.
-
-The shortcut is shown here as **Super + ~**: press Super and the key marked with a tilde, without Shift. The integration uses the `grave` key binding and replaces Omarchy’s original shortcut on that key. It uses its own `special:quickref` workspace and Omarchy's existing slide animation. The original `qconsole` and its agent are preserved; agents in normal tiling remain available on Super+Ctrl+Shift+A. Remove the `require` line and reload to restore the original hotkey. Back up config files before changing them.
-
-The panel covers 65% of the usable screen height and 86% of its width. It follows the monitor used to open it. Change the proportions in `quickref.lua` if needed.
-
-Create your notes folder and optionally seed it with examples, preserving existing files:
-
-```sh
-mkdir -p ~/Notes/cheatsheets
-cp -n examples/*.md ~/Notes/cheatsheets/
-```
+English is the default, regardless of the desktop language. Russian and Danish remain optional. Set `QUICKREF_LANGUAGE=ru`, `da`, or `system` in the environment inherited by Quickref Viewer to choose a translation or follow Omarchy's language setting. Missing translations fall back to English. Theme changes are followed live.
 
 ## Keyboard
 
 | Shortcut | Action |
 | --- | --- |
-| Super + ~ | Show / hide (Omarchy integration) |
-| Ctrl + K | Search note titles and filenames |
-| Ctrl + F | Find in current note, with selection and match count |
-| Enter / Shift + Enter, F3 / Shift + F3 | Next / previous match (wraps around) |
+| Super+Alt+grave | Show / hide the drop-down |
+| Ctrl+K | Search titles and filenames |
+| Ctrl+F | Find in the current note |
+| Enter / Shift+Enter, F3 / Shift+F3 | Next / previous match |
 | Escape | Close find |
-| Enter in search | Open first result |
-| Down in search, then Enter | Select a result with keyboard |
-| Ctrl + Tab / Ctrl + Shift + Tab | Next / previous tab |
-| Ctrl + W | Open note in external editor in normal tiling |
-| Ctrl + N | Create a new note |
-| Ctrl + S in new note | Save note |
-| Ctrl + E | Open note in external editor (alias of Ctrl+W) |
-| Ctrl + O | Open notes folder |
-| Space / PageDown / PageUp | Scroll when the reader has focus |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
+| Ctrl+N | Create a note |
+| Ctrl+S | Save a new note |
+| Ctrl+E / Ctrl+W | Open in external editor |
+| Ctrl+O | Open notes folder |
 | F5 | Reload notes |
-| ? | Shortcut help |
+| ? | Keyboard help |
 | Q | Quit when search is not focused |
+
+## Isolated development preview
+
+`./bin/preview` opens the application with copies of the English examples and session state under `.preview/` in this checkout. It does not install the drop-down integration. Use it for UI inspection; the installed plugin's normal entry point is `./bin/launch`, which toggles the special workspace.
+
+For an offscreen screenshot:
+
+```sh
+QT_QPA_PLATFORMTHEME=basic QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  ./bin/preview --screenshot "$PWD/preview.png"
+```
 
 ## Command line
 
 ```sh
-quickref open
-quickref create --name "Reading list" --text "# Reading list" --json
-quickref skill install --json
-quickref --notes /path/to/notes --state /path/to/session.json
+./build/quickref-viewer create --name "Reading list" --text "# Reading list" --json
+./build/quickref-viewer create --name "Checklist" --stdin --json
+./build/quickref-viewer --notes /path/to/notes --state /path/to/session.json
 ```
 
-For an isolated preview:
+`create` runs without a display and exits 0 on success, 1 on failure. `skill install` explicitly installs agent instructions under `$CODEX_HOME/skills/quickref-viewer` (default `~/.codex/skills/quickref-viewer`). It is never run automatically.
 
-```sh
-QT_QPA_PLATFORMTHEME=basic QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
-  build/quickref --notes examples --state /tmp/quickref-session.json \
-  --screenshot /tmp/quickref.png
-```
+## Removal
 
-`create` also accepts `--stdin` for Markdown content. It runs without a display, exits 0 on success or 1 on failure, and reports errors as JSON when `--json` is supplied. `skill install` installs the bundled agent instructions into `$CODEX_HOME/skills/quickref` (default `~/.codex/skills/quickref`).
+1. Quit the Quickref Viewer window with Q when search is not focused.
+2. Remove only `require("hypr.quickref_viewer")` from `~/.config/hypr/hyprland.lua` and reload Hyprland. This removes the plugin hotkey and workspace rules.
+3. Remove the Quickref Viewer widget from the bar and disable/remove `io.github.qrooto.quickref-viewer` through Omarchy's plugin manager.
+4. Delete `~/.config/hypr/quickref_viewer.lua` and the plugin repository if they remain.
 
-The interface follows the accent and rounding of Omarchy and watches its language setting live. English, Russian and Danish catalogs are bundled; Russian is the default if Omarchy has no language file. Missing translations fall back to English. Images and raw HTML in notes are not rendered; links open in the browser only when clicked. Syntax coloring is intentionally lightweight, not a full language parser. Very large libraries are indexed in memory.
+Notes and session data remain intact. Delete `~/Notes/quickref-viewer` and `~/.local/share/quickref-viewer` only if you no longer want them. The original Quickref Viewer installation is separate.
 
-## Development
+## Data and capabilities
 
-- `src/` — Qt Quick interface, Markdown backend, theme and translation support.
-- `tests/` — QtTest coverage for indexing, file watching, session restore, Markdown, note creation and keyboard interactions.
-- `integration/` — Omarchy / Hyprland drop-down integration.
-- `examples/` — sample Markdown notes.
-- `pkgbuild/` — Arch package metadata, desktop launcher and icon.
-- `bin/` — build, test and installation scripts.
-
-Run `./bin/build` and `./bin/test` after changes. Tests use Qt’s offscreen platform and software rendering, so they do not need a running desktop.
+The application reads and watches the selected notes directory, writes new notes and its session file atomically, reads Omarchy theme/language settings, accesses the clipboard when copying, and opens the default editor/file manager on request. It uses `hyprctl` for compositor integration. Images and raw HTML in notes are not rendered; links open only when clicked. It has no background network requests, telemetry, downloaded executable code, or automatic configuration edits.
 
 ## License
 
-MIT. Theme and translation support is adapted from Omarchy’s MIT-licensed app templates; see [LICENSE](LICENSE).
+MIT. Omarchy theme and translation templates retain their attribution in LICENSE.

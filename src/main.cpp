@@ -22,9 +22,9 @@ int main(int argc,char **argv) {
  if(argc>1)cli=QByteArray(argv[1])=="create"||QByteArray(argv[1])=="skill";
  if(cli){qputenv("QT_QPA_PLATFORM","offscreen");qputenv("QT_QPA_PLATFORMTHEME","basic");}
  QGuiApplication app(argc,argv);
- app.setApplicationName("quickref"); app.setApplicationVersion("0.1.0");app.setDesktopFileName("quickref");
+ app.setApplicationName("quickref-viewer"); app.setApplicationVersion("0.1.0");app.setDesktopFileName("quickref-viewer");
  QQuickStyle::setStyle("Material");
- QString folder=QDir::homePath()+"/Notes/cheatsheets";
+ QString folder=QDir::homePath()+"/Notes/quickref-viewer";
  QString state=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)+"/session.json";
  QString screenshot, name, text;int quitAfter=0; bool json=false, stdinText=false, skillInstall=false;
  auto args=app.arguments();
@@ -40,7 +40,7 @@ int main(int argc,char **argv) {
   else if(args[i]=="skill")skillInstall=true;
   else if(args[i]=="install"&&skillInstall){}
   else if(args[i]=="create"){}
-  else if(args[i]=="--help") {qInfo("Quickref — Markdown reference\nUsage: quickref [open] [--notes FOLDER] [--state FILE]\n       quickref create --name NAME [--text TEXT | --stdin] [--json]\n       quickref skill install [--json]");return 0;}
+  else if(args[i]=="--help") {qInfo("Quickref Viewer — Markdown reference\nUsage: quickref [open] [--notes FOLDER] [--state FILE]\n       quickref create --name NAME [--text TEXT | --stdin] [--json]\n       quickref skill install [--json]");return 0;}
   else if(args[i]!="open"){qCritical("Unknown argument");return 1;}
  }
  auto result=[&](bool ok,const QString &message) {
@@ -50,7 +50,7 @@ int main(int argc,char **argv) {
  };
  if(skillInstall) {
   auto home=qEnvironmentVariable("CODEX_HOME",QDir::homePath()+"/.codex");
-  auto target=home+"/skills/quickref/SKILL.md";QFile source(":/agent-skill.md");QSaveFile dest(target);
+  auto target=home+"/skills/quickref-viewer/SKILL.md";QFile source(":/agent-skill.md");QSaveFile dest(target);
   bool ok=QDir().mkpath(QFileInfo(target).absolutePath())&&source.open(QIODevice::ReadOnly)&&dest.open(QIODevice::WriteOnly);
   if(ok){auto bytes=source.readAll();ok=dest.write(bytes)==bytes.size()&&dest.commit();}
   return result(ok,ok?target:QString("Cannot install Quickref skill"));
@@ -77,7 +77,7 @@ int main(int argc,char **argv) {
    if(code!=0||status!=QProcess::NormalExit||output.contains("error:"))backend.launchError(QObject::tr("Cannot open editor")+": "+QString::fromUtf8(output));
    process->deleteLater();
   });
-  process->start("hyprctl",{"eval","require(\"hypr.quickref\").open_external("+literal+")"});
+  process->start("hyprctl",{"eval","require(\"hypr.quickref_viewer\").open_external("+literal+")"});
  });
  QQmlApplicationEngine engine;
  QObject::connect(&translator,&Translator::changed,&engine,&QQmlEngine::retranslate);

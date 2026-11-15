@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+mkdir -p "$ROOT/.preview/notes"
+cp -n "$ROOT"/examples/*.md "$ROOT/.preview/notes/"
+exec "$ROOT/build/quickref-viewer" open --notes "$ROOT/.preview/notes" --state "$ROOT/.preview/session.json" "$@"

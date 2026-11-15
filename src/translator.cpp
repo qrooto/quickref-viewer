@@ -25,7 +25,7 @@ Translator::Translator(const QString &languageFile, const QString &catalogDirect
 QString Translator::readLanguage(const QString &path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
-        return "ru";
+        return "en";
     const QString code = QString::fromUtf8(file.readLine()).trimmed();
     static const QRegularExpression valid("^[a-z]{2,3}(-[A-Za-z]{2})?$");
     return valid.match(code).hasMatch() ? code : "en";
@@ -106,15 +106,16 @@ void Translator::reload() {
         m_watcher.addPath(m_languageFile);
 
     // Catalogs are compiled in, so only a different language needs a reload.
-    const QString language = readLanguage(m_languageFile);
-    if (language == m_language)
+    const QString language = qEnvironmentVariable("QUICKREF_LANGUAGE", "en");
+    const QString selectedLanguage = language == "system" ? readLanguage(m_languageFile) : language;
+    if (selectedLanguage == m_language)
         return;
 
     // English first (it carries the plural forms of counted strings), then
     // the base language and the regional file over it (pt, then pt-BR), so a
     // missing string falls back toward English one step at a time.
     QHash<QString, QJsonValue> strings;
-    QStringList codes{"en", language.section('-', 0, 0), language};
+    QStringList codes{"en", selectedLanguage.section('-', 0, 0), selectedLanguage};
     codes.removeDuplicates();
     for (const auto &code : codes) {
         QFile catalog(m_catalogDirectory + "/" + code + ".json");
@@ -126,11 +127,11 @@ void Translator::reload() {
                 strings.insert(it.key(), it.value());
     }
 
-    m_language = language;
+    m_language = selectedLanguage;
     m_strings = strings;
     // Dates, numbers, and Qt's own day and month names follow the language
     // too, and right-to-left languages mirror the window.
-    const QLocale locale = formatLocale(language);
+    const QLocale locale = formatLocale(selectedLanguage);
     QLocale::setDefault(locale);
     QGuiApplication::setLayoutDirection(locale.textDirection());
     emit changed();
