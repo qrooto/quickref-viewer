@@ -11,6 +11,19 @@
 #include "backend.h"
 #include "theme.h"
 #include "translator.h"
+#include <functional>
+#include <fcntl.h>
+#include <unistd.h>
+#include <utility>
+
+static std::function<void()> beforePublication;
+extern "C" int __real_linkat(int, const char *, int, const char *, int);
+extern "C" int __wrap_linkat(int from, const char *source, int to, const char *target, int flags) {
+ auto hook=std::exchange(beforePublication,{});
+ if(hook)hook();
+ return __real_linkat(from,source,to,target,flags);
+}
+
 class QuickrefTests:public QObject {
  Q_OBJECT
  static void write(const QString &path,const QByteArray &value){QFile f(path);QVERIFY(f.open(QIODevice::WriteOnly));QCOMPARE(f.write(value),value.size());}
@@ -50,6 +63,43 @@ private slots:
   QVERIFY(!b.createNote("../escape","no"));QVERIFY(!QFileInfo::exists(dir.path()+"/escape.md"));
   QVERIFY(!b.createNote("/absolute","no"));QVERIFY(!b.createNote(" ","no"));
   write(dir.path()+"/outside.md","outside");QFile::link(dir.path()+"/outside.md",folder+"/linked.md");QVERIFY(!b.createNote("linked.md","no"));
+ }
+ void creationPublicationRaces(){
+  QTemporaryDir dir;const auto folder=dir.path()+"/notes";
+  Backend backend(folder,dir.path()+"/session");
+  const auto outside=dir.path()+"/outside.md";
+  write(outside,"keep original");
+  // Deterministic races, injected after writing/fsync and before linkat.
+  for(const auto &kind: {QString("symlink"),QString("dangling"),QString("hardlink"),QString("file")}) {
+   const auto target=folder+"/"+kind+".md";
+   beforePublication=[&] {
+    QVERIFY(!QFileInfo::exists(target));
+    if(kind=="file")write(target,"another writer");
+    else if(kind=="hardlink")QCOMPARE(::link(QFile::encodeName(outside).constData(),QFile::encodeName(target).constData()),0);
+    else QVERIFY(QFile::link(kind=="dangling" ? dir.path()+"/missing.md" : outside,target));
+   };
+   QVERIFY(!backend.createNote(kind,"must not overwrite"));
+   QVERIFY(!beforePublication);
+   QFile original(outside);QVERIFY(original.open(QIODevice::ReadOnly));QCOMPARE(original.readAll(),QByteArray("keep original"));
+   QVERIFY(!QFileInfo::exists(dir.path()+"/missing.md"));
+   if(kind=="file") {QFile other(target);QVERIFY(other.open(QIODevice::ReadOnly));QCOMPARE(other.readAll(),QByteArray("another writer"));}
+  }
+ }
+ void creationPinsDirectoryAndPublishesCompleteContents(){
+  QTemporaryDir dir;const auto folder=dir.path()+"/notes",moved=dir.path()+"/moved",outside=dir.path()+"/outside";
+  Backend backend(folder,dir.path()+"/session");QVERIFY(QDir().mkdir(outside));
+  const QByteArray content(128*1024,'x');
+  beforePublication=[&] {
+   QVERIFY(!QFileInfo::exists(folder+"/complete.md"));
+   QVERIFY(QDir().rename(folder,moved));
+   QVERIFY(QFile::link(outside,folder));
+  };
+  QVERIFY(backend.createNote("complete",QString::fromUtf8(content)));
+  QVERIFY(!beforePublication);
+  QVERIFY(!QFileInfo::exists(outside+"/complete.md"));
+  QFile note(moved+"/complete.md");QVERIFY(note.open(QIODevice::ReadOnly));QCOMPARE(note.readAll(),content);
+  const auto permissions=QFileInfo(note).permissions();
+  QVERIFY(!(permissions & (QFileDevice::ReadGroup|QFileDevice::WriteGroup|QFileDevice::ReadOther|QFileDevice::WriteOther)));
  }
  void englishFallback(){
   QTemporaryDir dir;

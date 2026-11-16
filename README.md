@@ -44,6 +44,8 @@ Quickref Viewer uses `~/Notes/quickref-viewer` and `~/.local/share/quickref-view
 
 English is the default, regardless of the desktop language. Russian and Danish remain optional. Set `QUICKREF_LANGUAGE=ru`, `da`, or `system` in the environment inherited by Quickref Viewer to choose a translation or follow Omarchy's language setting. Missing translations fall back to English. Theme changes are followed live.
 
+New notes require a Linux filesystem that supports `O_TMPFILE` and hard links, and a mounted `/proc`. The selected notes root must be a real directory, not a symlink. Creation fails with an error if these requirements are unavailable; it never falls back to an unsafe save. New notes are written to an unnamed file with owner-only permissions, then published atomically without replacing any existing directory entry.
+
 ## Keyboard
 
 | Shortcut | Action |

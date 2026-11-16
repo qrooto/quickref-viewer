@@ -7,7 +7,10 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QSaveFile>
-#include <QLockFile>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
 #include <QTextDocument>
 #include <QFont>
 #include <QRegularExpression>
@@ -154,13 +157,38 @@ bool Backend::createNote(const QString &name, const QString &text) {
   fail(tr("Enter a filename without slashes")); return false;
  }
  if(!filename.endsWith(".md",Qt::CaseInsensitive))filename+=".md";
- const QString path=m_folder+"/"+filename;
- QLockFile lock(path+".lock");
- if(!lock.tryLock(0)){fail(tr("This note is being created elsewhere"));return false;}
- if(QFileInfo::exists(path)||QFileInfo(path).isSymLink()){fail(tr("A note with this name already exists"));return false;}
- QSaveFile file(path);auto bytes=text.toUtf8();
- if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit()) {
-  fail(tr("Cannot save note: %1").arg(file.errorString()));return false;
+ // Pin the directory once; later pathname changes cannot redirect publication.
+ struct Descriptor {
+  int fd;
+  ~Descriptor() { if(fd>=0)::close(fd); }
+ };
+ auto saveError=[&] {
+  const int code=errno;
+  fail(code==EEXIST ? tr("A note with this name already exists")
+                   : tr("Cannot save note: %1").arg(QString::fromLocal8Bit(std::strerror(code))));
+  return false;
+ };
+ Descriptor directory{::open(QFile::encodeName(m_folder).constData(),O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW)};
+ if(directory.fd<0)return saveError();
+ // An unnamed inode cannot be swapped by another writer in a shared library.
+ // Fail closed if the filesystem does not support O_TMPFILE; never fall back
+ // to QSaveFile or a named temporary file in an attacker-writable directory.
+ Descriptor temporary{::openat(directory.fd,".",O_TMPFILE|O_WRONLY|O_CLOEXEC,0600)};
+ if(temporary.fd<0)return saveError();
+ const auto bytes=text.toUtf8();
+ qsizetype offset=0;
+ while(offset<bytes.size()) {
+  const auto count=::write(temporary.fd,bytes.constData()+offset,bytes.size()-offset);
+  if(count<0 && errno==EINTR)continue;
+  if(count<=0){if(count==0)errno=EIO;return saveError();}
+  offset+=count;
  }
+ if(::fsync(temporary.fd)<0)return saveError();
+ // linkat publishes the complete inode only if the name is absent. Existing
+ // files, hard links and symlinks (including dangling links) are never replaced.
+ // /proc/self/fd avoids AT_EMPTY_PATH's capability requirement for normal users.
+ const auto source=QByteArray("/proc/self/fd/")+QByteArray::number(temporary.fd);
+ if(::linkat(AT_FDCWD,source.constData(),directory.fd,QFile::encodeName(filename).constData(),AT_SYMLINK_FOLLOW)<0)
+  return saveError();
  fail({});m_query.clear();refresh();open(filename);return true;
 }
