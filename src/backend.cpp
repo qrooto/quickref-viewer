@@ -1,6 +1,9 @@
 #include "backend.h"
+#include "safeio.h"
 #include <QDir>
-#include <QDirIterator>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <functional>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -28,6 +31,8 @@ Backend::Backend(QString folder, QString statePath, QObject *parent):QObject(par
  connect(&m_watcher,&QFileSystemWatcher::fileChanged,this,[this]{m_debounce.start();});
  connect(&m_debounce,&QTimer::timeout,this,&Backend::refresh);
  if(!QDir().mkpath(m_folder)) fail(tr("Cannot create notes folder: %1").arg(m_folder));
+ m_libraryFd=::open(QFile::encodeName(m_folder).constData(),O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
+ if(m_libraryFd<0)fail(tr("Cannot read note: %1").arg(SafeIo::systemError()));
  QFile state(m_statePath);
  if(state.open(QIODevice::ReadOnly)) {
   auto obj=QJsonDocument::fromJson(state.readAll()).object();
@@ -42,26 +47,52 @@ Backend::Backend(QString folder, QString statePath, QObject *parent):QObject(par
  else loadDocument();
 }
 void Backend::fail(const QString &message) { m_error=message; emit errorChanged(); }
+Backend::~Backend() { save(); if(m_libraryFd>=0)::close(m_libraryFd); }
 bool Backend::valid(const QString &relative) const {
- if(relative.isEmpty()||QDir::isAbsolutePath(relative)) return false;
- QFileInfo file(m_folder+"/"+relative);
- auto root=QFileInfo(m_folder).canonicalFilePath()+"/";
- return file.isFile() && file.suffix().compare("md",Qt::CaseInsensitive)==0 && file.canonicalFilePath().startsWith(root);
+ if(relative.isEmpty() || relative.contains(QChar(0)) || QDir::isAbsolutePath(relative)
+    || QFileInfo(relative).suffix().compare("md",Qt::CaseInsensitive)!=0)return false;
+ const int fd=quickrefOpenBeneath(m_libraryFd,QFile::encodeName(relative).constData(),O_RDONLY|O_NONBLOCK);
+ if(fd<0)return false;
+ struct stat metadata{};const bool regular=::fstat(fd,&metadata)==0 && S_ISREG(metadata.st_mode);
+ ::close(fd);return regular;
 }
 void Backend::refresh() {
  auto watched=m_watcher.files()+m_watcher.directories(); if(!watched.isEmpty())m_watcher.removePaths(watched);
  QStringList paths{m_folder}; m_contents.clear();
- QDirIterator it(m_folder,QDir::Files|QDir::Dirs|QDir::NoDotAndDotDot,QDirIterator::Subdirectories);
- while(it.hasNext()) {
-  it.next(); auto info=it.fileInfo();
-  if(info.isSymLink())continue;
-  if(info.isDir()) { paths<<info.filePath();continue; }
-  QString relative=QDir(m_folder).relativeFilePath(info.filePath());
-  if(!valid(relative))continue;
-  paths<<info.filePath(); QFile file(info.filePath());
-  if(file.open(QIODevice::ReadOnly))m_contents[relative]=QString::fromUtf8(file.readAll());
-  else fail(tr("Cannot read note: %1").arg(relative));
- }
+ // Enumerate pinned directory descriptors, never a checked pathname. Every
+ // descendant is opened beneath the original root in one kernel operation.
+ std::function<void(int,const QString &)> scan=[&](int fd,const QString &prefix) {
+  DIR *stream=::fdopendir(fd);
+  if(!stream){::close(fd);return;}
+  while(auto *entry=::readdir(stream)) {
+   const QByteArray name(entry->d_name);
+   if(name=="." || name=="..")continue;
+   const QString relative=prefix+QFile::decodeName(name);
+   const int child=quickrefOpenBeneath(m_libraryFd,QFile::encodeName(relative).constData(),O_RDONLY|O_NONBLOCK);
+   if(child<0) {
+    if(errno!=ELOOP && errno!=EXDEV && errno!=ENOENT)fail(tr("Cannot read note: %1").arg(relative));
+    continue;
+   }
+   struct stat metadata{};
+   if(::fstat(child,&metadata)<0){::close(child);continue;}
+   if(S_ISDIR(metadata.st_mode)) {
+    paths<<m_folder+"/"+relative;scan(child,relative+"/");continue;
+   }
+   if(S_ISREG(metadata.st_mode) && QFileInfo(relative).suffix().compare("md",Qt::CaseInsensitive)==0) {
+    QFile file;
+    if(file.open(child,QIODevice::ReadOnly,QFileDevice::AutoCloseHandle)) {
+     paths<<m_folder+"/"+relative;m_contents[relative]=QString::fromUtf8(file.readAll());
+     continue;
+    }
+    fail(tr("Cannot read note: %1").arg(relative));
+   }
+   ::close(child);
+  }
+  ::closedir(stream);
+ };
+ const int root=quickrefOpenBeneath(m_libraryFd,".",O_RDONLY|O_DIRECTORY);
+ if(root>=0)scan(root,{});
+ else fail(tr("Cannot read note: %1").arg(SafeIo::systemError()));
  if(!QFileInfo::exists(m_folder))paths<<QFileInfo(m_folder).absolutePath();
  for(auto &p:paths)if(QFileInfo::exists(p))m_watcher.addPath(p);
  search(m_query);
@@ -157,38 +188,9 @@ bool Backend::createNote(const QString &name, const QString &text) {
   fail(tr("Enter a filename without slashes")); return false;
  }
  if(!filename.endsWith(".md",Qt::CaseInsensitive))filename+=".md";
- // Pin the directory once; later pathname changes cannot redirect publication.
- struct Descriptor {
-  int fd;
-  ~Descriptor() { if(fd>=0)::close(fd); }
- };
- auto saveError=[&] {
-  const int code=errno;
-  fail(code==EEXIST ? tr("A note with this name already exists")
-                   : tr("Cannot save note: %1").arg(QString::fromLocal8Bit(std::strerror(code))));
-  return false;
- };
- Descriptor directory{::open(QFile::encodeName(m_folder).constData(),O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW)};
- if(directory.fd<0)return saveError();
- // An unnamed inode cannot be swapped by another writer in a shared library.
- // Fail closed if the filesystem does not support O_TMPFILE; never fall back
- // to QSaveFile or a named temporary file in an attacker-writable directory.
- Descriptor temporary{::openat(directory.fd,".",O_TMPFILE|O_WRONLY|O_CLOEXEC,0600)};
- if(temporary.fd<0)return saveError();
- const auto bytes=text.toUtf8();
- qsizetype offset=0;
- while(offset<bytes.size()) {
-  const auto count=::write(temporary.fd,bytes.constData()+offset,bytes.size()-offset);
-  if(count<0 && errno==EINTR)continue;
-  if(count<=0){if(count==0)errno=EIO;return saveError();}
-  offset+=count;
+ QString error;
+ if(!SafeIo::publishNew(m_libraryFd,QFile::encodeName(filename),text.toUtf8(),error)) {
+  fail(tr("Cannot save note: %1").arg(error));return false;
  }
- if(::fsync(temporary.fd)<0)return saveError();
- // linkat publishes the complete inode only if the name is absent. Existing
- // files, hard links and symlinks (including dangling links) are never replaced.
- // /proc/self/fd avoids AT_EMPTY_PATH's capability requirement for normal users.
- const auto source=QByteArray("/proc/self/fd/")+QByteArray::number(temporary.fd);
- if(::linkat(AT_FDCWD,source.constData(),directory.fd,QFile::encodeName(filename).constData(),AT_SYMLINK_FOLLOW)<0)
-  return saveError();
  fail({});m_query.clear();refresh();open(filename);return true;
 }

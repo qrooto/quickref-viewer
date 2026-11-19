@@ -9,12 +9,15 @@
 #include <QQuickStyle>
 #include <QClipboard>
 #include "backend.h"
+#include "safeio.h"
 #include "theme.h"
 #include "translator.h"
 #include <functional>
 #include <fcntl.h>
 #include <unistd.h>
 #include <utility>
+#include <sys/stat.h>
+#include <cerrno>
 
 static std::function<void()> beforePublication;
 extern "C" int __real_linkat(int, const char *, int, const char *, int);
@@ -22,6 +25,19 @@ extern "C" int __wrap_linkat(int from, const char *source, int to, const char *t
  auto hook=std::exchange(beforePublication,{});
  if(hook)hook();
  return __real_linkat(from,source,to,target,flags);
+}
+
+static QByteArray racedReadPath;
+static std::function<void()> beforeReadOpen, afterReadOpen;
+static bool unavailableRead=false;
+extern "C" int __real_quickrefOpenBeneath(int, const char *, int);
+extern "C" int __wrap_quickrefOpenBeneath(int directory,const char *path,int flags) {
+ if(unavailableRead){errno=ENOSYS;return -1;}
+ const bool selected=racedReadPath==path;
+ if(selected && beforeReadOpen){auto hook=std::exchange(beforeReadOpen,{});hook();}
+ const int fd=__real_quickrefOpenBeneath(directory,path,flags);
+ if(selected && afterReadOpen){auto hook=std::exchange(afterReadOpen,{});hook();}
+ return fd;
 }
 
 class QuickrefTests:public QObject {
@@ -100,6 +116,78 @@ private slots:
   QFile note(moved+"/complete.md");QVERIFY(note.open(QIODevice::ReadOnly));QCOMPARE(note.readAll(),content);
   const auto permissions=QFileInfo(note).permissions();
   QVERIFY(!(permissions & (QFileDevice::ReadGroup|QFileDevice::WriteGroup|QFileDevice::ReadOther|QFileDevice::WriteOther)));
+ }
+ void refreshRejectsRacedSymlinks(){
+  for(bool ancestor : {false,true}) {
+   QTemporaryDir dir;const auto folder=dir.path()+"/notes",outside=dir.path()+"/outside";
+   QVERIFY(QDir().mkpath(folder+"/nested"));QVERIFY(QDir().mkdir(outside));
+   const QString relative=ancestor ? "nested/note.md" : "note.md";
+   write(folder+"/"+relative,"# Safe note");write(outside+"/note.md","# Outside secret");
+   Backend backend(folder,dir.path()+"/session");QCOMPARE(backend.notes().size(),1);
+   racedReadPath=QFile::encodeName(ancestor ? "nested" : relative);
+   beforeReadOpen=[&] {
+    if(ancestor) {QVERIFY(QDir().rename(folder+"/nested",folder+"/moved"));QVERIFY(QFile::link(outside,folder+"/nested"));}
+    else {QVERIFY(QFile::remove(folder+"/note.md"));QVERIFY(QFile::link(outside+"/note.md",folder+"/note.md"));}
+   };
+   backend.refresh();QVERIFY(!beforeReadOpen);
+   for(const auto &note:backend.notes())QVERIFY(note.toMap()["title"].toString()!="Outside secret");
+   backend.search("Outside secret");QVERIFY(backend.notes().isEmpty());
+  }
+ }
+ void refreshReadsPinnedDescriptors(){
+  QTemporaryDir dir;const auto folder=dir.path()+"/notes",outside=dir.path()+"/outside";
+  QVERIFY(QDir().mkpath(folder));QVERIFY(QDir().mkdir(outside));
+  write(folder+"/note.md","# Safe note");write(outside+"/note.md","# Outside secret");
+  Backend backend(folder,dir.path()+"/session");
+  racedReadPath="note.md";
+  afterReadOpen=[&] {QVERIFY(QFile::remove(folder+"/note.md"));QVERIFY(QFile::link(outside+"/note.md",folder+"/note.md"));};
+  backend.refresh();QVERIFY(!afterReadOpen);QCOMPARE(backend.notes().size(),1);
+  QCOMPARE(backend.notes()[0].toMap()["title"].toString(),QString("Safe note"));
+  QVERIFY(QFile::remove(folder+"/note.md"));write(folder+"/note.md","# Original root");
+  QVERIFY(QDir().rename(folder,dir.path()+"/moved"));QVERIFY(QFile::link(outside,folder));
+  backend.refresh();QCOMPARE(backend.notes().size(),1);
+  QCOMPARE(backend.notes()[0].toMap()["title"].toString(),QString("Original root"));
+ }
+ void refreshRejectsSpecialFilesAndUnavailableResolution(){
+  QTemporaryDir dir;const auto folder=dir.path()+"/notes";Backend backend(folder,dir.path()+"/session");
+  QCOMPARE(::mkfifo(QFile::encodeName(folder+"/pipe.md").constData(),0600),0);
+  write(folder+"/safe.md","# Safe");backend.refresh();QCOMPARE(backend.notes().size(),1);
+  unavailableRead=true;backend.refresh();unavailableRead=false;
+  QVERIFY(backend.notes().isEmpty());QVERIFY(!backend.error().isEmpty());
+ }
+ void skillInstallNeverReplacesExistingFiles(){
+  for(const auto &kind : {QString("file"),QString("symlink"),QString("dangling"),QString("hardlink"),QString("raced")}) {
+   QTemporaryDir dir;const auto home=dir.path()+"/codex",target=home+"/skills/quickref-viewer/SKILL.md",outside=dir.path()+"/outside";
+   QVERIFY(QDir().mkpath(QFileInfo(target).absolutePath()));write(outside,"keep existing instructions");
+   if(kind=="file")write(target,"keep existing instructions");
+   else if(kind=="symlink")QVERIFY(QFile::link(outside,target));
+   else if(kind=="dangling")QVERIFY(QFile::link(dir.path()+"/missing",target));
+   else if(kind=="hardlink")QCOMPARE(::link(QFile::encodeName(outside).constData(),QFile::encodeName(target).constData()),0);
+   else beforePublication=[&] {QVERIFY(QFile::link(outside,target));};
+   QString error;QVERIFY(!SafeIo::installSkill(home,error));QVERIFY(!error.isEmpty());QVERIFY(!beforePublication);
+   QFile original(outside);QVERIFY(original.open(QIODevice::ReadOnly));QCOMPARE(original.readAll(),QByteArray("keep existing instructions"));
+   QVERIFY(!QFileInfo::exists(dir.path()+"/missing"));
+   if(kind=="file") {QFile existing(target);QVERIFY(existing.open(QIODevice::ReadOnly));QCOMPARE(existing.readAll(),QByteArray("keep existing instructions"));}
+  }
+ }
+ void skillInstallRejectsUnsafeDirectories(){
+  for(const auto &component : {QString("codex"),QString("skills"),QString("quickref-viewer")}) {
+   QTemporaryDir dir;const auto home=dir.path()+"/codex",outside=dir.path()+"/outside";QVERIFY(QDir().mkdir(outside));
+   const auto target=component=="codex" ? home : component=="skills" ? home+"/skills" : home+"/skills/quickref-viewer";
+   QVERIFY(QDir().mkpath(QFileInfo(target).absolutePath()));QVERIFY(QFile::link(outside,target));
+   QString error;QVERIFY(!SafeIo::installSkill(home,error));QVERIFY(!QFileInfo::exists(outside+"/SKILL.md"));
+  }
+  QTemporaryDir dir;const auto home=dir.path()+"/codex";QVERIFY(QDir().mkdir(home));
+  QCOMPARE(::chmod(QFile::encodeName(home).constData(),0777),0);
+  QString error;QVERIFY(!SafeIo::installSkill(home,error));QVERIFY(error.contains("owned by"));
+ }
+ void skillInstallCreatesCompletePrivateFile(){
+  QTemporaryDir dir;const auto home=dir.path()+"/new/codex",target=home+"/skills/quickref-viewer/SKILL.md";
+  QString error;QVERIFY2(SafeIo::installSkill(home,error),qPrintable(error));
+  QFile installed(target),source(":/agent-skill.md");QVERIFY(installed.open(QIODevice::ReadOnly));QVERIFY(source.open(QIODevice::ReadOnly));
+  QCOMPARE(installed.readAll(),source.readAll());
+  struct stat metadata{};QCOMPARE(::stat(QFile::encodeName(target).constData(),&metadata),0);QCOMPARE(metadata.st_mode & 0777,mode_t(0600));
+  QVERIFY(!SafeIo::installSkill(home,error));
  }
  void englishFallback(){
   QTemporaryDir dir;

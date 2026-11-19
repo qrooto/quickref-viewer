@@ -9,3 +9,7 @@ RESOURCES += ../src/resources.qrc
 
 # Insert hostile directory changes immediately before the real publication syscall.
 QMAKE_LFLAGS += -Wl,--wrap=linkat
+
+HEADERS += ../src/safeio.h
+SOURCES += ../src/safeio.cpp
+QMAKE_LFLAGS += -Wl,--wrap=quickrefOpenBeneath

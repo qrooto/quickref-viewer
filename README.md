@@ -64,6 +64,10 @@ New notes require a Linux filesystem that supports `O_TMPFILE` and hard links, a
 | ? | Keyboard help |
 | Q | Quit when search is not focused |
 
+## Security regression tests
+
+After `./bin/build`, run `./bin/test` for Qt regression coverage, including deterministic path-substitution tests. With Python 3 available, run `python3 tests/cli_skill_install.py` to exercise the actual CLI: concurrent installation, preservation of user instructions and symlink targets, owner-only file permissions, JSON output, and exit status. These checks use temporary directories and a temporary `CODEX_HOME`; they do not install into the current user’s Codex settings.
+
 ## Isolated development preview
 
 `./bin/preview` opens the application with copies of the English examples and session state under `.preview/` in this checkout. It does not install the drop-down integration. Use it for UI inspection; the installed plugin's normal entry point is `./bin/launch`, which toggles the special workspace.
@@ -83,7 +87,7 @@ QT_QPA_PLATFORMTHEME=basic QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 ./build/quickref-viewer --notes /path/to/notes --state /path/to/session.json
 ```
 
-`create` runs without a display and exits 0 on success, 1 on failure. `skill install` explicitly installs agent instructions under `$CODEX_HOME/skills/quickref-viewer` (default `~/.codex/skills/quickref-viewer`). It is never run automatically.
+`create` runs without a display and exits 0 on success, 1 on failure. `skill install` explicitly installs agent instructions under `$CODEX_HOME/skills/quickref-viewer` (default `~/.codex/skills/quickref-viewer`). It is never run automatically. Installation only creates a new `SKILL.md`; any existing file, hard link, or symlink (including a dangling symlink) is refused without replacement. The selected Codex home and skill directories must be owned by the current user and must not be writable by group or others; symlinks in the installation path are rejected.
 
 ## Removal
 
@@ -93,6 +97,10 @@ QT_QPA_PLATFORMTHEME=basic QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 4. Delete `~/.config/hypr/quickref_viewer.lua` and the plugin repository if they remain.
 
 Notes and session data remain intact. Delete `~/Notes/quickref-viewer` and `~/.local/share/quickref-viewer` only if you no longer want them. The original Quickref Viewer installation is separate.
+
+## Safe library reads
+
+Linux 5.6 or newer with `openat2` is required. The application keeps the opened notes-root directory for its lifetime and enumerates directories by descriptor. Every descendant is opened beneath that root with symlinks, magic links, and mount crossings prohibited. Only regular files are read, through the same opened descriptor that was checked. Symbolic links and mounted subtrees are not indexed. If the kernel cannot enforce these restrictions, reading fails with a reported error; there is no pathname-based fallback. Restart the application to select a replacement root directory.
 
 ## Data and capabilities
 

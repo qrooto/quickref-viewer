@@ -10,7 +10,7 @@
 #include <QDesktopServices>
 #include <QFile>
 #include <QFileInfo>
-#include <QSaveFile>
+#include "safeio.h"
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <cstdio>
@@ -50,10 +50,9 @@ int main(int argc,char **argv) {
  };
  if(skillInstall) {
   auto home=qEnvironmentVariable("CODEX_HOME",QDir::homePath()+"/.codex");
-  auto target=home+"/skills/quickref-viewer/SKILL.md";QFile source(":/agent-skill.md");QSaveFile dest(target);
-  bool ok=QDir().mkpath(QFileInfo(target).absolutePath())&&source.open(QIODevice::ReadOnly)&&dest.open(QIODevice::WriteOnly);
-  if(ok){auto bytes=source.readAll();ok=dest.write(bytes)==bytes.size()&&dest.commit();}
-  return result(ok,ok?target:QString("Cannot install Quickref skill"));
+  const auto target=QDir(home).absoluteFilePath("skills/quickref-viewer/SKILL.md");
+  QString error;const bool ok=SafeIo::installSkill(home,error);
+  return result(ok,ok?target:QString("Cannot install Quickref Viewer skill: ")+error);
  }
  Translator translator;app.installTranslator(&translator);
  Backend backend(folder,state);

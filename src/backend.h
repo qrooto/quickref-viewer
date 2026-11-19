@@ -16,7 +16,7 @@ class Backend : public QObject {
  Q_PROPERTY(int active READ active NOTIFY tabsChanged)
 public:
  explicit Backend(QString folder, QString statePath, QObject *parent=nullptr);
- ~Backend() override { save(); }
+ ~Backend() override;
  QVariantList notes() const { return m_notes; }
  QVariantList tabs() const;
  QVariantList blocks() const { return m_blocks; }
@@ -44,6 +44,7 @@ signals:
  void documentChanged();
  void errorChanged();
 private:
+ int m_libraryFd=-1;
  bool valid(const QString &relative) const;
  void loadDocument();
  void save();
