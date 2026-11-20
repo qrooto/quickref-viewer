@@ -116,11 +116,11 @@ ApplicationWindow {
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 16; spacing: 12
                     Rectangle { width: 30; height: 30; radius: Math.min(4,theme.radius); color: theme.accent
-                        Text { anchors.centerIn: parent; text: ">_"; color: theme.accentForeground; font.bold: true; font.pixelSize: 16 }
+                        Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: ">_"; color: theme.accentForeground; font.bold: true; font.pixelSize: 16 }
                     }
                     Column {
-                        Text { text: "Quickref Viewer"; color: "#f2f5fa"; font.pixelSize: 19; font.bold: true }
-                        Text { text: qsTr("Your Markdown notes, a shortcut away"); color: "#8a98ad"; font.pixelSize: 11 }
+                        Text { textFormat: Text.PlainText; text: "Quickref Viewer"; color: "#f2f5fa"; font.pixelSize: 19; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: qsTr("Your Markdown notes, a shortcut away"); color: "#8a98ad"; font.pixelSize: 11 }
                     }
                     Item { Layout.fillWidth: true }
                     Button { text: qsTr("New note"); highlighted: true; onClicked: composer.open() }
@@ -147,9 +147,9 @@ ApplicationWindow {
                             Keys.onEscapePressed: { text = ""; reader.forceActiveFocus() }
                         }
                         RowLayout {
-                            Text { text: qsTr("LIBRARY"); color: "#8796ab"; font.pixelSize: 11; font.letterSpacing: 1.5 }
+                            Text { textFormat: Text.PlainText; text: qsTr("LIBRARY"); color: "#8796ab"; font.pixelSize: 11; font.letterSpacing: 1.5 }
                             Item { Layout.fillWidth: true }
-                            Text { text: backend.notes.length; color: theme.accent; font.pixelSize: 12 }
+                            Text { textFormat: Text.PlainText; text: backend.notes.length; color: theme.accent; font.pixelSize: 12 }
                         }
                         ListView {
                             id: notesList; objectName: "notesList"
@@ -166,15 +166,27 @@ ApplicationWindow {
                                 Rectangle { width: 3; height: 24; anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; color: backend.current===modelData.path ? theme.accent : "transparent" }
                                 Column {
                                     anchors.fill: parent; anchors.margins: 12; spacing: 6
-                                    Text { width: parent.width; text: modelData.title; elide: Text.ElideRight; color: "#e0e6ef"; font.pixelSize: 14 }
-                                    Text { width: parent.width; text: modelData.path; elide: Text.ElideMiddle; color: "#8494aa"; font.pixelSize: 10 }
+                                    Text { textFormat: Text.PlainText; width: parent.width; text: modelData.title; elide: Text.ElideRight; color: "#e0e6ef"; font.pixelSize: 14 }
+                                    Text { textFormat: Text.PlainText; width: parent.width; text: modelData.path; elide: Text.ElideMiddle; color: "#8494aa"; font.pixelSize: 10 }
                                 }
                                 HoverHandler { id: noteHover }
                                 TapHandler { onTapped: { backend.open(modelData.path); reader.forceActiveFocus() } }
                             }
-                            Label { anchors.centerIn: parent; width: parent.width-12; visible: backend.notes.length===0; text: search.text ? qsTr("No matching notes") : qsTr("Add .md files to your notes folder"); wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; color: "#8a98ad" }
+                            Label { textFormat: Text.PlainText; anchors.centerIn: parent; width: parent.width-12; visible: backend.notes.length===0; text: search.text ? qsTr("No matching notes") : qsTr("Add .md files to your notes folder"); wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; color: "#8a98ad" }
                         }
-                        Label { Layout.fillWidth: true; text: backend.folder; elide: Text.ElideMiddle; color: "#62738a"; font.pixelSize: 10; ToolTip.visible: folderHover.hovered; ToolTip.text: backend.folder; HoverHandler { id: folderHover } }
+                        Label {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            text: backend.folder
+                            elide: Text.ElideMiddle; color: "#62738a"; font.pixelSize: 10
+                            ToolTip {
+                                id: folderTip
+                                objectName: "notesFolderTooltip"
+                                visible: folderHover.hovered
+                                contentItem: Text { textFormat: Text.PlainText; text: backend.folder; color: "#e0e6ef"; font: folderTip.font }
+                            }
+                            HoverHandler { id: folderHover }
+                        }
                     }
                 }
                 Rectangle { Layout.fillHeight: true; width: 1; color: "#263141" }
@@ -193,7 +205,7 @@ ApplicationWindow {
                                 width: Math.min(230,Math.max(140,tabLabel.implicitWidth+56)); height: tabList.height
                                 color: backend.active===index ? "#1c2735" : "#141c26"
                                 TapHandler { onTapped: backend.open(modelData.path) }
-                                Text { id: tabLabel; anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter; width: parent.width-50; text: modelData.title; elide: Text.ElideRight; font.pixelSize: 12; color: backend.active===index ? "#edf3fc" : "#8898ad" }
+                                Text { textFormat: Text.PlainText; id: tabLabel; anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter; width: parent.width-50; text: modelData.title; elide: Text.ElideRight; font.pixelSize: 12; color: backend.active===index ? "#edf3fc" : "#8898ad" }
                                 ToolButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; width: 32; height: 32; text: "×"; onClicked: backend.closeTab(index) }
                                 Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: backend.active===index ? theme.accent : "transparent" }
                             }
@@ -204,7 +216,7 @@ ApplicationWindow {
                         objectName: "noteToolbar"
                         Layout.minimumHeight: implicitHeight
                         Layout.fillWidth: true; Layout.leftMargin: 24; Layout.rightMargin: 16; spacing: 8
-                        Label { Layout.fillWidth: true; text: backend.current; elide: Text.ElideMiddle; color: "#8191a7"; font.pixelSize: 11 }
+                        Label { textFormat: Text.PlainText; Layout.fillWidth: true; text: backend.current; elide: Text.ElideMiddle; color: "#8191a7"; font.pixelSize: 11 }
                         Button { text: qsTr("Find in note · Ctrl+F"); flat: true; enabled: backend.active>=0; onClicked: win.openFind() }
                         Button { text: qsTr("Open in editor"); flat: true; enabled: backend.active>=0; onClicked: backend.edit() }
                     }
@@ -221,7 +233,7 @@ ApplicationWindow {
                             onTextChanged: win.findMatches()
                             Keys.onReturnPressed: function(event) { win.nextMatch(event.modifiers & Qt.ShiftModifier ? -1 : 1) }
                         }
-                        Label { objectName: "matchCount"; text: noteFind.text.length ? (win.matches.length ? (win.matchIndex + 1) + " / " + win.matches.length : qsTr("No matches")) : ""; color: "#90a9c6" }
+                        Label { textFormat: Text.PlainText; objectName: "matchCount"; text: noteFind.text.length ? (win.matches.length ? (win.matchIndex + 1) + " / " + win.matches.length : qsTr("No matches")) : ""; color: "#90a9c6" }
                         ToolButton { text: "↑"; enabled: win.matches.length > 0; onClicked: win.nextMatch(-1); ToolTip.text: qsTr("Previous match · Shift+Enter"); ToolTip.visible: hovered }
                         ToolButton { text: "↓"; enabled: win.matches.length > 0; onClicked: win.nextMatch(1); ToolTip.text: qsTr("Next match · Enter"); ToolTip.visible: hovered }
                         ToolButton { text: "×"; onClicked: win.closeFind() }
@@ -286,7 +298,7 @@ ApplicationWindow {
                                         x: 14; y: 12; width: parent.width-28; spacing: 10
                                         RowLayout {
                                             width: parent.width; height: 26
-                                            Text { text: section.modelData.language || qsTr("text"); color: "#90a9c6"; font.family: "monospace"; font.pixelSize: 11 }
+                                            Text { textFormat: Text.PlainText; text: section.modelData.language || qsTr("text"); color: "#90a9c6"; font.family: "monospace"; font.pixelSize: 11 }
                                             Item { Layout.fillWidth: true }
                                             Button {
                                                 id: copyButton; text: copied ? qsTr("Copied") : qsTr("Copy"); flat: true; property bool copied: false
@@ -308,16 +320,16 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            Label { width: parent.width; visible: backend.active<0; text: qsTr("Your answers, a keystroke away.\nChoose a note on the left."); color: "#8798b0"; font.pixelSize: 20; wrapMode: Text.WordWrap; topPadding: 50 }
+                            Label { textFormat: Text.PlainText; width: parent.width; visible: backend.active<0; text: qsTr("Your answers, a keystroke away.\nChoose a note on the left."); color: "#8798b0"; font.pixelSize: 20; wrapMode: Text.WordWrap; topPadding: 50 }
                         }
                     }
                     Rectangle {
                         Layout.fillWidth: true; Layout.preferredHeight: 28; color: "#141b25"
-                        Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: qsTr("Ctrl+N  New note     Ctrl+K  Search     Ctrl+F  Find in note     Ctrl+W  Open in editor     ?  Shortcuts"); color: "#7e90a7"; font.pixelSize: 10 }
+                        Text { textFormat: Text.PlainText; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 16; text: qsTr("Ctrl+N  New note     Ctrl+K  Search     Ctrl+F  Find in note     Ctrl+W  Open in editor     ?  Shortcuts"); color: "#7e90a7"; font.pixelSize: 10 }
                     }
                 }
             }
-            Label { Layout.fillWidth: true; visible: backend.error!==""; text: backend.error; color: "#ffadad"; padding: 10; wrapMode: Text.WordWrap }
+            Label { textFormat: Text.PlainText; Layout.fillWidth: true; visible: backend.error!==""; text: backend.error; color: "#ffadad"; padding: 10; wrapMode: Text.WordWrap }
         }
     }
     Popup {
@@ -326,8 +338,8 @@ ApplicationWindow {
         onClosed: win.helpVisible=false
         contentItem: Column {
             spacing: 18
-            Label { text: qsTr("Keyboard shortcuts"); font.pixelSize: 22; font.bold: true }
-            Label { width: parent.width; text: qsTr("Super+Alt+grave — Show / hide Quickref\nCtrl+K — Search note titles\nCtrl+F — Find in current note\nEnter / Shift+Enter — Next / previous match\nEscape — Close find\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
+            Label { textFormat: Text.PlainText; text: qsTr("Keyboard shortcuts"); font.pixelSize: 22; font.bold: true }
+            Label { textFormat: Text.PlainText; width: parent.width; text: qsTr("Super+Alt+grave — Show / hide Quickref\nCtrl+K — Search note titles\nCtrl+F — Find in current note\nEnter / Shift+Enter — Next / previous match\nEscape — Close find\nEnter — Open the first result\nCtrl+Tab / Ctrl+Shift+Tab — Switch tabs\nCtrl+N — Create a note\nCtrl+W / Ctrl+E — Open note in tiling editor\n× on tab — Close tab\nCtrl+O — Open notes folder\nSpace / PageDown — Scroll down\nF5 — Reload notes\nQ — Quit\n? — This help"); wrapMode: Text.WordWrap; lineHeight: 1.5 }
             Button { text: qsTr("Got it"); onClicked: win.helpVisible=false }
         }
     }
@@ -369,7 +381,7 @@ ApplicationWindow {
                 selectByMouse: true
                 Keys.onReturnPressed: noteBody.forceActiveFocus()
             }
-            Label { text: qsTr("Markdown content"); color: "#96a6bb" }
+            Label { textFormat: Text.PlainText; text: qsTr("Markdown content"); color: "#96a6bb" }
             ScrollView {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 TextArea {
@@ -380,9 +392,9 @@ ApplicationWindow {
                     selectByMouse: true
                 }
             }
-            Label { Layout.fillWidth: true; visible: backend.error!==""; text: backend.error; color: "#ffadad"; wrapMode: Text.WordWrap }
+            Label { textFormat: Text.PlainText; Layout.fillWidth: true; visible: backend.error!==""; text: backend.error; color: "#ffadad"; wrapMode: Text.WordWrap }
             RowLayout {
-                Label { Layout.fillWidth: true; text: qsTr("Saved as .md in your notes folder"); color: "#8698ae"; font.pixelSize: 11 }
+                Label { textFormat: Text.PlainText; Layout.fillWidth: true; text: qsTr("Saved as .md in your notes folder"); color: "#8698ae"; font.pixelSize: 11 }
                 Button { text: qsTr("Cancel"); onClicked: win.cancelNote() }
                 Button { text: qsTr("Save note · Ctrl+S"); enabled: noteName.text.trim().length>0; highlighted: true; onClicked: win.saveNote() }
             }
@@ -399,7 +411,7 @@ ApplicationWindow {
         }
         onRejected: win.quitAfterDiscard=false
         contentItem: ColumnLayout {
-            Label { text: qsTr("The note has not been saved."); padding: 12 }
+            Label { textFormat: Text.PlainText; text: qsTr("The note has not been saved."); padding: 12 }
             RowLayout {
                 Button { text: qsTr("Keep editing"); onClicked: discardDialog.reject() }
                 Button { text: qsTr("Discard"); onClicked: discardDialog.accept() }

@@ -15,6 +15,11 @@
 #include <cerrno>
 #include <cstring>
 #include <QTextDocument>
+#include <QTextBlock>
+#include <QTextFragment>
+#include <QTextCursor>
+#include <QTextImageFormat>
+#include <QImage>
 #include <QFont>
 #include <QRegularExpression>
 #include <QGuiApplication>
@@ -22,6 +27,37 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <algorithm>
+
+namespace {
+// Parsing untrusted Markdown must not read local images or request resources,
+// even before image objects are removed from the document for QML rendering.
+class PassiveDocument final : public QTextDocument {
+protected:
+ QVariant loadResource(int, const QUrl &) override { return QVariant::fromValue(QImage()); }
+};
+
+void replaceImagesWithText(QTextDocument &document) {
+ struct Replacement { int start; int length; QString text; };
+ QList<Replacement> replacements;
+ for(auto block=document.begin();block.isValid();block=block.next()) {
+  for(auto it=block.begin();!it.atEnd();++it) {
+   const auto fragment=it.fragment();
+   if(fragment.isValid() && fragment.charFormat().isImageFormat()) {
+    auto alt=fragment.charFormat().property(QTextFormat::ImageAltText).toString();
+    replacements.append({fragment.position(),fragment.length(),alt.isEmpty() ? QStringLiteral("[Image omitted]") : alt});
+   }
+  }
+ }
+ // Work backwards so positions remain valid; insert plain characters, never
+ // HTML or the image's original format/anchor. This covers every image syntax
+ // understood by Qt's Markdown parser, including reference-style images.
+ for(auto it=replacements.crbegin();it!=replacements.crend();++it) {
+  QTextCursor cursor(&document);
+  cursor.setPosition(it->start);cursor.setPosition(it->start+it->length,QTextCursor::KeepAnchor);
+  cursor.insertText(it->text,QTextCharFormat());
+ }
+}
+}
 
 Backend::Backend(QString folder, QString statePath, QObject *parent):QObject(parent),m_folder(QDir(folder).absolutePath()),m_statePath(statePath) {
  m_debounce.setSingleShot(true); m_debounce.setInterval(160);
@@ -153,10 +189,10 @@ QVariantList Backend::parse(const QString &markdown) {
    }
    html+=value.mid(offset).toHtmlEscaped();html="<pre style=\"font-family:monospace; color:#c8d7e8; white-space:pre-wrap\">"+html+"</pre>";
   } else {
-   QTextDocument doc; doc.setDefaultFont(QFont("sans-serif",11)); doc.setDefaultStyleSheet("body { color: #d9e0eb; font-family: sans-serif; font-size: 15px; } h1 { color: #f1f5fb; font-size: 26px; } h2 { color: #f1f5fb; font-size: 20px; } h3 { color: #f1f5fb; } a { color: #80bfff; } th, td { padding: 7px; } code { color: #a8d8b9; }");
-   // HTML is treated as literal text; notes cannot load remote images.
-   value.replace(QRegularExpression("!\\[([^\\]]*)\\]\\([^)]*\\)"),"[\\1]");
-   doc.setMarkdown(value,QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)|QTextDocument::MarkdownNoHTML);html=doc.toHtml();
+   PassiveDocument doc; doc.setDefaultFont(QFont("sans-serif",11)); doc.setDefaultStyleSheet("body { color: #d9e0eb; font-family: sans-serif; font-size: 15px; } h1 { color: #f1f5fb; font-size: 26px; } h2 { color: #f1f5fb; font-size: 20px; } h3 { color: #f1f5fb; } a { color: #80bfff; } th, td { padding: 7px; } code { color: #a8d8b9; }");
+   doc.setMarkdown(value,QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)|QTextDocument::MarkdownNoHTML);
+   replaceImagesWithText(doc);
+   html=doc.toHtml();
   }
   result<<QVariantMap{{"code",code},{"text",value},{"html",html},{"language",language}};
  };

@@ -8,6 +8,14 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QClipboard>
+#include <QTextDocument>
+#include <QTextBlock>
+#include <QTextFragment>
+#include <QImage>
+#include <QQmlNetworkAccessManagerFactory>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include "backend.h"
 #include "safeio.h"
 #include "theme.h"
@@ -40,6 +48,33 @@ extern "C" int __wrap_quickrefOpenBeneath(int directory,const char *path,int fla
  return fd;
 }
 
+// Count attempted resource requests without allowing tests to contact any host.
+class DeniedReply final : public QNetworkReply {
+public:
+ DeniedReply(const QNetworkRequest &request,QObject *parent):QNetworkReply(parent) {
+  setRequest(request);setUrl(request.url());open(QIODevice::ReadOnly);
+  setError(QNetworkReply::ContentAccessDenied,"Resource request blocked by privacy regression test");
+  QTimer::singleShot(0,this,[this]{emit errorOccurred(error());emit finished();});
+ }
+ void abort() override {}
+protected:
+ qint64 readData(char *,qint64) override { return -1; }
+};
+class CountingNetworkFactory final : public QQmlNetworkAccessManagerFactory {
+ class Manager final : public QNetworkAccessManager {
+  int &count;
+ public:
+  Manager(int &requests,QObject *parent):QNetworkAccessManager(parent),count(requests) {}
+ protected:
+  QNetworkReply *createRequest(Operation,const QNetworkRequest &request,QIODevice *) override {
+   ++count;return new DeniedReply(request,this);
+  }
+ };
+public:
+ int requests=0;
+ QNetworkAccessManager *create(QObject *parent) override { return new Manager(requests,parent); }
+};
+
 class QuickrefTests:public QObject {
  Q_OBJECT
  static void write(const QString &path,const QByteArray &value){QFile f(path);QVERIFY(f.open(QIODevice::WriteOnly));QCOMPARE(f.write(value),value.size());}
@@ -69,6 +104,72 @@ private slots:
   auto nested=Backend::parse("````markdown\n```bash\nip a\n```\n````");QCOMPARE(nested.size(),1);QVERIFY(nested[0].toMap()["text"].toString().contains("```bash"));
   auto unsafe=Backend::parse("<img src='https://example.com/private'>");QVERIFY(!unsafe[0].toMap()["html"].toString().contains("<img"));
   QTemporaryDir dir;Backend b(dir.path(),dir.path()+"/session");b.copy("docker ps\n");QCOMPARE(QGuiApplication::clipboard()->text(),QString("docker ps\n"));
+ }
+ void markdownImageSyntaxIsPassive_data(){
+  QTest::addColumn<QString>("markdown");
+  QTest::newRow("inline")<<QString("![inline alt](http://127.0.0.1:9/inline.png)");
+  QTest::newRow("full-reference")<<QString("![reference alt][tracker]\n\n[tracker]: http://127.0.0.1:9/reference.png");
+  QTest::newRow("collapsed-reference")<<QString("![collapsed][]\n\n[collapsed]: http://127.0.0.1:9/collapsed.png");
+  QTest::newRow("shortcut-reference")<<QString("![shortcut]\n\n[shortcut]: http://127.0.0.1:9/shortcut.png");
+  QTest::newRow("multiline-definition")<<QString("![multiline][ID]\n\n[id]:\n  <http://127.0.0.1:9/multiline.png>\n  \"image title\"");
+  QTest::newRow("linked-image")<<QString("[![linked alt][image]](https://example.invalid/)\n\n[image]: http://127.0.0.1:9/linked.png");
+  QTest::newRow("relative-image")<<QString("![relative](./local.png)");
+  QTest::newRow("local-image")<<QString("![local](file:///tmp/quickref-private-image.png)");
+  QTest::newRow("data-image")<<QString("![data](data:image/png;base64,aGVsbG8=)");
+  QTest::newRow("raw-html")<<QString("<img src=\"http://127.0.0.1:9/html.png\"> <style>@import url(http://127.0.0.1:9/style);</style>");
+  QTest::newRow("alt-markup")<<QString("![<img src=\"http://127.0.0.1:9/alt.png\">][id]\n\n[id]: http://127.0.0.1:9/image.png");
+ }
+ void markdownImageSyntaxIsPassive(){
+  QFETCH(QString,markdown);
+  int resourceRequests=0;
+  const auto previous=QTextDocument::defaultResourceProvider();
+  QTextDocument::setDefaultResourceProvider([&](const QUrl &){++resourceRequests;return QVariant::fromValue(QImage(2,2,QImage::Format_ARGB32));});
+  const auto blocks=Backend::parse(markdown);
+  QTextDocument::setDefaultResourceProvider(previous);
+  QCOMPARE(resourceRequests,0);QVERIFY(!blocks.isEmpty());
+  for(const auto &value:blocks) {
+   const auto html=value.toMap()["html"].toString();
+   QVERIFY(!html.contains(QRegularExpression("<img\\b",QRegularExpression::CaseInsensitiveOption)));
+   QTextDocument rendered;rendered.setHtml(html);
+   for(auto block=rendered.begin();block.isValid();block=block.next())
+    for(auto it=block.begin();!it.atEnd();++it)QVERIFY(!it.fragment().charFormat().isImageFormat());
+  }
+ }
+ void imageAltTextAndFormattingRemainReadable(){
+  const auto blocks=Backend::parse("# Heading\n\n![Readable description][photo]\n\n[photo]: https://example.invalid/photo.png\n\n**Bold** and [Web link](https://example.invalid/)\n\n```markdown\n![literal](https://example.invalid/code.png)\n```");
+  QCOMPARE(blocks.size(),2);
+  const auto html=blocks[0].toMap()["html"].toString();
+  QTextDocument document;document.setHtml(html);const auto text=document.toPlainText();
+  QVERIFY(text.contains("Readable description"));QVERIFY(text.contains("Bold"));QVERIFY(text.contains("Heading"));
+  QVERIFY(html.contains("href=\"https://example.invalid/\""));
+  QVERIFY(blocks[1].toMap()["text"].toString().contains("![literal]"));
+ }
+ void qmlDoesNotRequestNoteImages(){
+  QTemporaryDir dir;const auto notes=dir.path()+"/notes";QVERIFY(QDir().mkdir(notes));
+  const auto payload=QString("<img src=\"http://127.0.0.1:9/title.png\">");
+  write(notes+"/note.md",("# "+payload+"\n\n![inline](http://127.0.0.1:9/inline.png)\n\n![reference][r]\n\n[r]: http://127.0.0.1:9/reference.png\n\n![collapsed][]\n\n[collapsed]: http://127.0.0.1:9/collapsed.png\n\n![shortcut]\n\n[shortcut]: http://127.0.0.1:9/shortcut.png").toUtf8());
+  Backend backend(notes,dir.path()+"/session");Theme theme(dir.path());Translator translator(dir.path()+"/language");
+  CountingNetworkFactory factory;QQmlApplicationEngine engine;engine.setNetworkAccessManagerFactory(&factory);
+  engine.rootContext()->setContextProperty("backend",&backend);engine.rootContext()->setContextProperty("theme",&theme);engine.rootContext()->setContextProperty("translator",&translator);
+  QStringList warnings;connect(&engine,&QQmlEngine::warnings,this,[&](const QList<QQmlError> &errors){for(const auto &error:errors)warnings<<error.toString();});
+  engine.load(QUrl("qrc:/Main.qml"));QVERIFY(!engine.rootObjects().isEmpty());
+  auto window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());QVERIFY(window);
+  backend.launchError(payload);QTest::qWait(200);
+  QCOMPARE(factory.requests,0);QVERIFY(!window->grabWindow().isNull());
+  int labels=0;
+  for(auto *item:window->findChildren<QQuickItem*>()) {
+   if(item->property("text").toString()==payload && item->property("textFormat").isValid()) {
+    QCOMPARE(item->property("textFormat").toInt(),int(Qt::PlainText));++labels;
+   }
+  }
+  QVERIFY(labels>=2);
+  auto tooltip=window->findChild<QObject*>("notesFolderTooltip");QVERIFY(tooltip);
+  auto content=tooltip->property("contentItem").value<QObject*>();QVERIFY(content);
+  QCOMPARE(content->property("textFormat").toInt(),int(Qt::PlainText));
+  QCOMPARE(content->property("text").toString(),backend.folder());
+  tooltip->setProperty("visible",true);QTest::qWait(50);tooltip->setProperty("visible",false);
+  backend.refresh();backend.open("note.md");QTest::qWait(100);QCOMPARE(factory.requests,0);
+  QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));
  }
  void createWithoutOverwrite(){
   QTemporaryDir dir;auto folder=dir.path()+"/notes";Backend b(folder,dir.path()+"/session");

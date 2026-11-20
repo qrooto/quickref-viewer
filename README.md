@@ -66,7 +66,7 @@ New notes require a Linux filesystem that supports `O_TMPFILE` and hard links, a
 
 ## Security regression tests
 
-After `./bin/build`, run `./bin/test` for Qt regression coverage, including deterministic path-substitution tests. With Python 3 available, run `python3 tests/cli_skill_install.py` to exercise the actual CLI: concurrent installation, preservation of user instructions and symlink targets, owner-only file permissions, JSON output, and exit status. These checks use temporary directories and a temporary `CODEX_HOME`; they do not install into the current user’s Codex settings.
+After `./bin/build`, run `./bin/test` for Qt regression coverage, including deterministic path-substitution tests and passive Markdown rendering. Image coverage includes inline, full/collapsed/shortcut references, multiline definitions, linked images, local/relative/data URLs, raw HTML, and markup-shaped alternative text. A real QML rendering test records resource-request attempts with a test-only network manager that blocks every request; it expects zero attempts on open and refresh. With Python 3 available, run `python3 tests/cli_skill_install.py` to exercise the actual CLI: concurrent installation, preservation of user instructions and symlink targets, owner-only file permissions, JSON output, and exit status. These checks use temporary directories and a temporary `CODEX_HOME`; they do not install into the current user’s Codex settings.
 
 ## Isolated development preview
 
@@ -104,7 +104,7 @@ Linux 5.6 or newer with `openat2` is required. The application keeps the opened 
 
 ## Data and capabilities
 
-The application reads and watches the selected notes directory, writes new notes and its session file atomically, reads Omarchy theme/language settings, accesses the clipboard when copying, and opens the default editor/file manager on request. It uses `hyprctl` for compositor integration. Images and raw HTML in notes are not rendered; links open only when clicked. It has no background network requests, telemetry, downloaded executable code, or automatic configuration edits.
+The application reads and watches the selected notes directory, writes new notes and its session file atomically, reads Omarchy theme/language settings, accesses the clipboard when copying, and opens the default editor/file manager on request. It uses `hyprctl` for compositor integration. All Markdown images, including reference-style images, are replaced by their alternative text (or `[Image omitted]`) before rich text reaches the interface. The Markdown parser does not load image resources; local images and embedded data images are also omitted. Raw HTML is displayed literally. Note titles, filenames, folder tooltips, and errors are plain text. Ordinary HTTP/HTTPS links open in the browser only when explicitly clicked. It has no background network requests, telemetry, downloaded executable code, or automatic configuration edits.
 
 ## License
 
